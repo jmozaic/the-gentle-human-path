@@ -1,65 +1,104 @@
-import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="ghp-home">
+      <section className="ghp-hero">
+        <div className="ghp-hero-copy">
+          <p className="ghp-kicker">THE GENTLE HUMAN PATH</p>
+          <h1>
+            A refined system for
+            <br />
+            coaching, character,
+            <br />
+            and growth.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="ghp-lead">
+            The Gentle Human Path brings together student progress, parent
+            connection, coach notes, and daily class tracking into one modern
+            academy system.
           </p>
+
+          <div className="ghp-actions">
+            <Link href="/parent-signup" className="ghp-btn ghp-btn-primary">
+              Parent Signup
+            </Link>
+            <Link href="/coach-dashboard" className="ghp-btn ghp-btn-secondary">
+              Enter Dashboard
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="ghp-hero-panel">
+          <div className="ghp-panel-card">
+            <p className="ghp-panel-label">Academy</p>
+            <h3>Track the path.</h3>
+            <p>
+              Daily roster sheets, profiles, promotions, and notes designed for
+              real class use.
+            </p>
+          </div>
+
+          <div className="ghp-panel-card">
+            <p className="ghp-panel-label">Parents</p>
+            <h3>Stay connected.</h3>
+            <p>
+              Give families a clearer view of progress, behavior, technique, and
+              long-term development.
+            </p>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="ghp-feature-strip">
+        <div className="ghp-feature">
+          <span className="ghp-feature-label">Coach Dashboard</span>
+          <p>Roster-based attendance, behavior, technique, and profile tools.</p>
+        </div>
+
+        <div className="ghp-feature">
+          <span className="ghp-feature-label">Parent Portal</span>
+          <p>Simple access to student progress, updates, and communication.</p>
+        </div>
+
+        <div className="ghp-feature">
+          <span className="ghp-feature-label">Student Path</span>
+          <p>Belts, stripes, notes, and progress presented with clarity.</p>
+        </div>
+      </section>
+
+      <section className="ghp-editorial">
+        <div className="ghp-editorial-block">
+          <p className="ghp-kicker">COACHING SYSTEM</p>
+          <h2>Built for the daily rhythm of an academy.</h2>
+        </div>
+
+        <div className="ghp-editorial-grid">
+          <div className="ghp-editorial-card">
+            <h3>Roster-first workflow</h3>
+            <p>
+              Mark attendance, behavior, and technique directly from the daily
+              sheet without clutter.
+            </p>
+          </div>
+
+          <div className="ghp-editorial-card">
+            <h3>Student profiles</h3>
+            <p>
+              Edit belts, stripes, notes, and progress in one place without
+              crowding the class view.
+            </p>
+          </div>
+
+          <div className="ghp-editorial-card">
+            <h3>Parent-ready structure</h3>
+            <p>
+              Create a cleaner bridge between the academy and the family without
+              losing your coaching workflow.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
