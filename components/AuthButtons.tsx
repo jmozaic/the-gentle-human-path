@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
 export default function AuthButtons() {
@@ -46,15 +47,29 @@ export default function AuthButtons() {
     return <div className="auth-buttons" />;
   }
 
-  if (!loggedIn) {
-    return null;
+  if (loggedIn) {
+    return (
+      <div className="auth-buttons">
+        <button onClick={handleLogout} className="ghp-btn ghp-btn-primary ghp-btn-small">
+          Log Out
+        </button>
+      </div>
+    );
   }
 
   return (
     <div className="auth-buttons">
-      <button onClick={handleLogout} className="ghp-btn ghp-btn-primary ghp-btn-small">
-        Log Out
-      </button>
+      <Link href="/parent-signup" className="ghp-btn ghp-btn-small ghp-btn-gold">
+        Parent Signup
+      </Link>
+
+      <Link href="/parent-login" className="ghp-btn ghp-btn-ghost ghp-btn-small">
+        Parent Login
+      </Link>
+
+      <Link href="/coach-login" className="ghp-btn ghp-btn-ghost ghp-btn-small">
+        Coach Login
+      </Link>
     </div>
   );
 }

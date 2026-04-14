@@ -1328,3 +1328,35 @@ h3,
   box-shadow:
     0 0 8px rgba(212, 175, 55, 0.4);
 }
+.ghp-btn-gold {
+  background: linear-gradient(
+    135deg,
+    #d3b06d 0%,
+    #c8a45e 45%,
+    #b99045 100%
+  );
+  color: #111111;
+  border: 1px solid rgba(185, 144, 69, 0.55);
+  border-radius: 999px;
+  box-shadow:
+    0 0 10px rgba(211, 176, 109, 0.45),
+    0 0 20px rgba(211, 176, 109, 0.22),
+    0 0 34px rgba(211, 176, 109, 0.12);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.ghp-btn-gold:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+  box-shadow:
+    0 0 14px rgba(211, 176, 109, 0.6),
+    0 0 28px rgba(211, 176, 109, 0.32),
+    0 0 44px rgba(211, 176, 109, 0.16);
+}
+
+.ghp-btn-gold:active {
+  transform: translateY(0);
+}
