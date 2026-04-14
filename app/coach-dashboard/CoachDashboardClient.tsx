@@ -540,6 +540,15 @@ export default function CoachDashboardClient() {
           <p className="ghp-dash-lead">
             A roster-first class workflow with student profiles, notes, promotions, and progress.
           </p>
+
+          <div style={{ marginTop: "12px" }}>
+            <button
+              onClick={() => window.location.href = "/invite-coach"}
+              className="ghp-btn ghp-btn-primary"
+            >
+              Invite Coach
+            </button>
+          </div>
         </div>
 
         <div className="ghp-brand-chip">
