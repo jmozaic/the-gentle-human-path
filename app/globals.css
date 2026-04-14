@@ -1085,3 +1085,110 @@ textarea {
 .ghp-parent-progress-label strong {
   color: #111111;
 }
+/* ========================= */
+/* AOJ-STYLE TYPOGRAPHY */
+/* ========================= */
+
+body {
+  font-family: var(--font-sans);
+  color: #111111;
+  background: #ffffff;
+}
+
+/* Editorial serif headings */
+h1,
+h2,
+h3,
+.ghp-dash-title {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  color: #111111;
+}
+
+/* Main hero/dashboard title */
+.ghp-dash-title {
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: -1px;
+  line-height: 1.05;
+}
+
+/* Small upper labels */
+.ghp-kicker {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 11px;
+  color: #7a7a7a;
+}
+
+/* Supporting copy */
+.ghp-dash-lead,
+.ghp-auth-copy p,
+.ghp-parent-hero p:not(.ghp-kicker) {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.7;
+  color: #555555;
+}
+
+/* Buttons */
+.ghp-btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Card titles */
+.ghp-dash-card h2,
+.ghp-auth-card-title,
+.ghp-panel-card h3,
+.ghp-editorial-card h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.5px;
+}
+
+/* Cleaner spacing */
+.ghp-dash-hero {
+  margin-bottom: 40px;
+}
+
+.ghp-dash-card {
+  padding: 28px;
+  border-radius: 18px;
+  border: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+/* Progress bars */
+.ghp-progress {
+  width: 100%;
+  height: 8px;
+  background: #e9e9e9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ghp-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.35);
+  transition: width 0.4s ease;
+}
+
+/* Header refinement */
+.brand-name {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.3px;
+}
+
+.brand-subtitle,
+.main-nav a {
+  font-family: var(--font-sans);
+}
