@@ -546,7 +546,7 @@ export default function CoachDashboardClient() {
               onClick={() => window.location.href = "/invite-coach"}
               className="ghp-btn ghp-btn-primary"
             >
-              Invite Coach
+              Invite New Coach
             </button>
           </div>
         </div>
