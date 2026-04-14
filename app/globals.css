@@ -1289,3 +1289,42 @@ h3,
 .ghp-hero-copy .ghp-lead {
   color: rgba(247, 243, 236, 0.82) !important;
 }
+/* ========================= */
+/* GOLD PRIMARY BUTTON */
+/* ========================= */
+
+/* Parent Signup (primary CTA) */
+.auth-buttons .ghp-btn-primary {
+  background: linear-gradient(
+    135deg,
+    #d4af37 0%,
+    #c9a227 40%,
+    #b8961f 100%
+  );
+  color: #111111;
+  border: none;
+  border-radius: 999px;
+
+  box-shadow:
+    0 0 0 rgba(212, 175, 55, 0),
+    0 0 12px rgba(212, 175, 55, 0.35),
+    0 0 24px rgba(212, 175, 55, 0.15);
+
+  transition: all 0.25s ease;
+}
+
+/* Hover = stronger glow */
+.auth-buttons .ghp-btn-primary:hover {
+  box-shadow:
+    0 0 16px rgba(212, 175, 55, 0.6),
+    0 0 32px rgba(212, 175, 55, 0.35);
+
+  transform: translateY(-1px);
+}
+
+/* Slight press effect */
+.auth-buttons .ghp-btn-primary:active {
+  transform: translateY(0);
+  box-shadow:
+    0 0 8px rgba(212, 175, 55, 0.4);
+}
