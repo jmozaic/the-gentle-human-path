@@ -20,10 +20,15 @@ export default function Home() {
           </p>
 
           <div className="ghp-actions">
-            <Link href="/parent-signup" className="ghp-btn ghp-btn-primary">
+            <Link href="/parent-signup" className="ghp-btn ghp-btn-gold">
               Parent Signup
             </Link>
-            <Link href="/coach-dashboard" className="ghp-btn ghp-btn-secondary">
+
+            <Link href="/parent-login" className="ghp-btn ghp-btn-secondary">
+              Parent Login
+            </Link>
+
+            <Link href="/coach-login" className="ghp-btn ghp-btn-secondary">
               Enter Dashboard
             </Link>
           </div>
