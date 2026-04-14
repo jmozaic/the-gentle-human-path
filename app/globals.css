@@ -1086,77 +1086,104 @@ textarea {
   color: #111111;
 }
 /* ========================= */
-/* AOJ-STYLE TYPOGRAPHY */
+/* AOJ-LIKE SANS TYPOGRAPHY */
 /* ========================= */
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   color: #111111;
   background: #ffffff;
 }
 
-/* Editorial serif headings */
+/* headings */
 h1,
 h2,
 h3,
-.ghp-dash-title {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: -0.5px;
-  line-height: 1.15;
+.ghp-dash-title,
+.brand-name,
+.ghp-auth-card-title,
+.ghp-dash-card h2,
+.ghp-panel-card h3,
+.ghp-editorial-card h3 {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
   color: #111111;
 }
 
-/* Main hero/dashboard title */
+/* dashboard title */
 .ghp-dash-title {
   font-size: 44px;
-  font-weight: 400;
-  letter-spacing: -1px;
-  line-height: 1.05;
+  font-weight: 500;
+  letter-spacing: -0.045em;
 }
 
-/* Small upper labels */
-.ghp-kicker {
-  font-family: var(--font-sans);
+/* small uppercase labels */
+.ghp-kicker,
+.brand-subtitle,
+.main-nav a,
+.ghp-btn,
+.ghp-field span,
+.ghp-feature-label,
+.ghp-panel-label {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+
+/* nav + labels */
+.ghp-kicker,
+.brand-subtitle,
+.ghp-field span,
+.ghp-feature-label,
+.ghp-panel-label {
   font-size: 11px;
   color: #7a7a7a;
 }
 
-/* Supporting copy */
+/* nav links */
+.main-nav a {
+  font-size: 11px;
+  color: #111111;
+  opacity: 0.9;
+}
+
+.main-nav a:hover {
+  opacity: 1;
+  color: #111111;
+}
+
+/* supporting copy */
 .ghp-dash-lead,
 .ghp-auth-copy p,
-.ghp-parent-hero p:not(.ghp-kicker) {
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.7;
-  color: #555555;
+.ghp-parent-hero p:not(.ghp-kicker),
+.ghp-lead,
+.ghp-feature p,
+.ghp-panel-card p,
+.ghp-editorial-card p {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #5a5a5a;
 }
 
-/* Buttons */
+/* brand name */
+.brand-name {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+/* buttons */
 .ghp-btn {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 600;
 }
 
-/* Card titles */
-.ghp-dash-card h2,
-.ghp-auth-card-title,
-.ghp-panel-card h3,
-.ghp-editorial-card h3 {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: -0.5px;
-}
-
-/* Cleaner spacing */
-.ghp-dash-hero {
-  margin-bottom: 40px;
-}
-
+/* cards */
 .ghp-dash-card {
   padding: 28px;
   border-radius: 18px;
@@ -1164,7 +1191,7 @@ h3,
   background: #ffffff;
 }
 
-/* Progress bars */
+/* progress bars */
 .ghp-progress {
   width: 100%;
   height: 8px;
@@ -1179,16 +1206,4 @@ h3,
   background: linear-gradient(90deg, #22c55e, #16a34a);
   box-shadow: 0 0 6px rgba(34, 197, 94, 0.35);
   transition: width 0.4s ease;
-}
-
-/* Header refinement */
-.brand-name {
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: -0.3px;
-}
-
-.brand-subtitle,
-.main-nav a {
-  font-family: var(--font-sans);
 }
