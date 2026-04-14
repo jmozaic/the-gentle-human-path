@@ -24,6 +24,8 @@ export default function ParentSignupPage() {
       email,
       password,
       options: {
+        emailRedirectTo:
+          "https://the-gentle-human-path-7a6i.vercel.app/parent-portal",
         data: {
           role: "parent",
           first_name: firstName,

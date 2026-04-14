@@ -16,7 +16,8 @@ export default function ForgotPasswordPage() {
     setMessage("Sending reset email...");
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "http://localhost:3000/update-password",
+      redirectTo:
+        "https://the-gentle-human-path-7a6i.vercel.app/update-password",
     });
 
     if (error) {
