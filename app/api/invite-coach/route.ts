@@ -16,23 +16,30 @@ export async function POST(request: Request) {
     const supabase = createAdminClient();
 
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: "http://localhost:3000/coach-login",
+      redirectTo: "https://the-gentle-human-path-7a6i.vercel.app/coach-login",
       data: {
         role: "coach",
       },
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: error.message,
+        },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({
       message: "Coach invite sent.",
       user: data.user,
     });
-  } catch {
+  } catch (err: any) {
     return NextResponse.json(
-      { error: "Something went wrong sending the invite." },
+      {
+        error: err?.message || "Something went wrong sending the invite.",
+      },
       { status: 500 }
     );
   }
