@@ -1207,3 +1207,85 @@ h3,
   box-shadow: 0 0 6px rgba(34, 197, 94, 0.35);
   transition: width 0.4s ease;
 }
+/* ========================= */
+/* HERO + AUTH BUTTON FIXES */
+/* ========================= */
+
+/* hero section text should be visible on dark background */
+.ghp-hero-copy,
+.ghp-auth-copy {
+  color: #f7f3ec;
+}
+
+.ghp-hero-copy h1,
+.ghp-auth-copy h1 {
+  color: #f7f3ec !important;
+}
+
+.ghp-hero-copy .ghp-kicker,
+.ghp-auth-copy .ghp-kicker {
+  color: #d3b06d !important;
+}
+
+/* text under headline should be stronger, not washed out */
+.ghp-lead,
+.ghp-dash-lead,
+.ghp-auth-copy p,
+.ghp-parent-hero p:not(.ghp-kicker) {
+  color: rgba(247, 243, 236, 0.82);
+  font-size: 15px;
+  line-height: 1.75;
+  font-weight: 400;
+}
+
+/* parent login should look like a real pill button */
+.auth-buttons a,
+.auth-buttons button,
+.ghp-btn {
+  border-radius: 999px;
+}
+
+/* logged-out auth buttons */
+.auth-buttons .ghp-btn-ghost {
+  background: #ffffff;
+  border: 1px solid rgba(17, 17, 17, 0.14);
+  color: #111111;
+}
+
+.auth-buttons .ghp-btn-ghost:hover {
+  background: #f5efe6;
+}
+
+/* make the primary auth button feel stronger */
+.auth-buttons .ghp-btn-primary {
+  background: #111111;
+  color: #f7f3ec;
+  border: 1px solid #111111;
+}
+
+.auth-buttons .ghp-btn-primary:hover {
+  background: #252525;
+}
+
+/* if the homepage secondary button looks weak, tighten it */
+.ghp-btn-secondary {
+  background: transparent;
+  color: #f7f3ec;
+  border: 1px solid rgba(247, 243, 236, 0.28);
+  border-radius: 999px;
+}
+
+.ghp-btn-secondary:hover {
+  background: rgba(247, 243, 236, 0.08);
+}
+
+/* extra safety for hero headline on dark panel */
+.ghp-hero-copy h1 {
+  color: #f7f3ec !important;
+  opacity: 1 !important;
+}
+
+/* stronger supporting copy on homepage hero */
+.ghp-hero-copy .ghp-lead {
+  color: rgba(247, 243, 236, 0.82) !important;
+}
