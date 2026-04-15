@@ -1434,33 +1434,40 @@ h3,
   flex-wrap: wrap;
 }
 
+/* circular program badge */
 .ghp-program-badge {
-  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 10px;
+
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.05em;
+
+  border: 1px solid transparent;
 }
 
+/* Wildlings = gold */
 .ghp-badge-wildlings {
   background: rgba(211, 176, 109, 0.18);
-  border: 1px solid rgba(211, 176, 109, 0.45);
+  border: 1px solid rgba(211, 176, 109, 0.5);
   color: #9a741f;
 }
 
+/* Hunters = green */
 .ghp-badge-hunters {
   background: rgba(34, 197, 94, 0.14);
-  border: 1px solid rgba(34, 197, 94, 0.35);
+  border: 1px solid rgba(34, 197, 94, 0.4);
   color: #166534;
 }
 
+/* Adults = black/neutral */
 .ghp-badge-adults {
   background: rgba(17, 17, 17, 0.08);
-  border: 1px solid rgba(17, 17, 17, 0.2);
+  border: 1px solid rgba(17, 17, 17, 0.25);
   color: #111111;
 }

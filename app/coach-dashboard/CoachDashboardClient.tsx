@@ -139,7 +139,7 @@ function getAge(birthday?: string | null) {
 function getProgramLabel(program?: Program | null) {
   if (program === "hunters") return "Hunters";
   if (program === "adults") return "Adults";
-  return "Wildlings";
+  return "W";
 }
 
 function getProgramClass(program?: Program | null) {
