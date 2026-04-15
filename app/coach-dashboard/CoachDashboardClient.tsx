@@ -610,7 +610,7 @@ export default function CoachDashboardClient() {
       <section className="ghp-dash-hero">
         <div>
           <p className="ghp-kicker">Coach Dashboard</p>
-          <h1 className="ghp-dash-title">The Gentle Human Path Admin XYZ</h1>
+          <h1 className="ghp-dash-title">The Gentle Human Path Admin</h1>
           <p className="ghp-dash-lead">
             Organize students by roster, track A / B / T, and manage each profile.
           </p>
