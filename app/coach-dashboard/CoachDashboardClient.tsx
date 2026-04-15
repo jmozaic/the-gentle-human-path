@@ -18,17 +18,14 @@ type Belt =
   | "Green"
   | "Green/Black";
 
-type Program = "wildlings" | "hunters" | "adults";
-
 type Student = {
   id: string;
   name: string;
   belt: Belt;
   stripes: number;
   notes: string;
-  photo_url?: string | null;
   birthday?: string | null;
-  program?: Program | null;
+  roster?: string | null;
 };
 
 type Session = {
@@ -56,7 +53,7 @@ const BELTS: Belt[] = [
   "Green/Black",
 ];
 
-const PROGRAMS: Program[] = ["wildlings", "hunters", "adults"];
+const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
 const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
   2: 0.9,
@@ -121,31 +118,18 @@ function getAge(birthday?: string | null) {
   if (!birthday) return null;
 
   const birth = new Date(birthday);
+  if (Number.isNaN(birth.getTime())) return null;
+
   const now = new Date();
 
   let age = now.getFullYear() - birth.getFullYear();
-  const monthDiff = now.getMonth() - birth.getMonth();
+  const m = now.getMonth() - birth.getMonth();
 
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && now.getDate() < birth.getDate())
-  ) {
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
     age--;
   }
 
   return age;
-}
-
-function getProgramLabel(program?: Program | null) {
-  if (program === "hunters") return "Hunters";
-  if (program === "adults") return "Adults";
-  return "W";
-}
-
-function getProgramClass(program?: Program | null) {
-  if (program === "hunters") return "ghp-badge-hunters";
-  if (program === "adults") return "ghp-badge-adults";
-  return "ghp-badge-wildlings";
 }
 
 export default function CoachDashboardClient() {
@@ -158,6 +142,8 @@ export default function CoachDashboardClient() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentBelt, setNewStudentBelt] = useState<Belt>("White");
+  const [activeRoster, setActiveRoster] = useState<string>("Wildlings");
+  const [customRosters, setCustomRosters] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingNote, setSavingNote] = useState(false);
   const [message, setMessage] = useState("");
@@ -216,18 +202,33 @@ export default function CoachDashboardClient() {
         belt: (student.belt || "White") as Belt,
         stripes: student.stripes || 0,
         notes: latestNote?.content || "",
-        photo_url: student.photo_url || null,
         birthday: student.birthday || null,
-        program: (student.program || "wildlings") as Program,
+        roster: student.roster || "Wildlings",
       };
     });
 
+    const allRosterNames = Array.from(
+      new Set(
+        studentList
+          .map((s) => (s.roster || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    const nonDefaultRosters = allRosterNames.filter(
+      (r) => !DEFAULT_ROSTERS.includes(r)
+    );
+
+    setCustomRosters(nonDefaultRosters);
     setStudents(studentList);
     setSessions(sessionsData as Session[]);
     setAvailableClasses(monthlySettingsData?.available_classes ?? 16);
 
     if (studentList.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(studentList[0].id);
+      const firstInRoster = studentList.find(
+        (s) => (s.roster || "Wildlings") === activeRoster
+      );
+      setSelectedStudentId(firstInRoster?.id || studentList[0].id);
     }
 
     setLoading(false);
@@ -256,17 +257,25 @@ export default function CoachDashboardClient() {
     loadMonthlySettings();
   }, [selectedDate, supabase]);
 
+  const allRosters = useMemo(() => {
+    const merged = [...DEFAULT_ROSTERS, ...customRosters];
+    return Array.from(new Set(merged));
+  }, [customRosters]);
+
+  const rosterStudents = useMemo(() => {
+    return students.filter((s) => (s.roster || "Wildlings") === activeRoster);
+  }, [students, activeRoster]);
+
   useEffect(() => {
-    if (students.length > 0 && selectedStudentId == null) {
-      setSelectedStudentId(students[0].id);
+    if (rosterStudents.length > 0) {
+      const stillVisible = rosterStudents.find((s) => s.id === selectedStudentId);
+      if (!stillVisible) {
+        setSelectedStudentId(rosterStudents[0].id);
+      }
+    } else {
+      setSelectedStudentId(null);
     }
-    if (
-      selectedStudentId != null &&
-      !students.find((s) => s.id === selectedStudentId)
-    ) {
-      setSelectedStudentId(students[0]?.id ?? null);
-    }
-  }, [students, selectedStudentId]);
+  }, [rosterStudents, selectedStudentId]);
 
   async function saveMonthlySettings(month: string, classes: number) {
     const { error } = await supabase
@@ -284,6 +293,20 @@ export default function CoachDashboardClient() {
     }
   }
 
+  async function addRoster() {
+    const rosterName = prompt("Enter new roster name");
+    const trimmed = rosterName?.trim();
+
+    if (!trimmed) return;
+    if (allRosters.includes(trimmed)) {
+      setActiveRoster(trimmed);
+      return;
+    }
+
+    setCustomRosters((prev) => [...prev, trimmed]);
+    setActiveRoster(trimmed);
+  }
+
   async function addStudent() {
     const trimmed = newStudentName.trim();
     if (!trimmed) return;
@@ -299,7 +322,7 @@ export default function CoachDashboardClient() {
         belt: newStudentBelt,
         stripes: 0,
         parent_email: parentEmail,
-        program: "wildlings",
+        roster: activeRoster,
       })
       .select()
       .single();
@@ -315,9 +338,8 @@ export default function CoachDashboardClient() {
       belt: data.belt as Belt,
       stripes: data.stripes,
       notes: "",
-      photo_url: data.photo_url || null,
       birthday: data.birthday || null,
-      program: (data.program || "wildlings") as Program,
+      roster: data.roster || activeRoster,
     };
 
     setStudents((prev) => [...prev, newStudent]);
@@ -354,8 +376,7 @@ export default function CoachDashboardClient() {
     if (updates.belt !== undefined) dbUpdates.belt = updates.belt;
     if (updates.stripes !== undefined) dbUpdates.stripes = updates.stripes;
     if (updates.birthday !== undefined) dbUpdates.birthday = updates.birthday;
-    if (updates.program !== undefined) dbUpdates.program = updates.program;
-    if (updates.photo_url !== undefined) dbUpdates.photo_url = updates.photo_url;
+    if (updates.roster !== undefined) dbUpdates.roster = updates.roster;
 
     const { error } = await supabase
       .from("students")
@@ -372,6 +393,10 @@ export default function CoachDashboardClient() {
         student.id === studentId ? { ...student, ...updates } : student
       )
     );
+
+    if (updates.roster && !allRosters.includes(updates.roster)) {
+      setCustomRosters((prev) => [...prev, updates.roster!]);
+    }
   }
 
   function getSession(studentId: string, date: string): Session {
@@ -509,11 +534,8 @@ export default function CoachDashboardClient() {
 
       const baselineSkillGoal = Math.ceil(MIN_ATTENDANCE * 0.75);
 
-      const behaviorProgress =
-        Math.min((behavior / baselineSkillGoal) * 100, 100);
-
-      const techniqueProgress =
-        Math.min((technique / baselineSkillGoal) * 100, 100);
+      const behaviorProgress = Math.min((behavior / baselineSkillGoal) * 100, 100);
+      const techniqueProgress = Math.min((technique / baselineSkillGoal) * 100, 100);
 
       return {
         ...student,
@@ -534,8 +556,12 @@ export default function CoachDashboardClient() {
     });
   }, [students, sessions, selectedDate, availableClasses]);
 
+  const visibleSummaries = summaries.filter(
+    (s) => (s.roster || "Wildlings") === activeRoster
+  );
+
   const selectedStudent =
-    summaries.find((s) => s.id === selectedStudentId) || null;
+    visibleSummaries.find((s) => s.id === selectedStudentId) || null;
 
   async function awardStripe(studentId: string) {
     const student = summaries.find((s) => s.id === studentId);
@@ -586,7 +612,7 @@ export default function CoachDashboardClient() {
           <p className="ghp-kicker">Coach Dashboard</p>
           <h1 className="ghp-dash-title">The Gentle Human Path Admin</h1>
           <p className="ghp-dash-lead">
-            A roster-first class workflow with student profiles, notes, promotions, and progress.
+            Organize students by roster, track A / B / T, and manage each profile.
           </p>
         </div>
 
@@ -604,6 +630,27 @@ export default function CoachDashboardClient() {
           {message}
         </div>
       ) : null}
+
+      <div className="ghp-roster-tabs">
+        {allRosters.map((roster) => (
+          <button
+            key={roster}
+            type="button"
+            className={`ghp-roster-tab ${activeRoster === roster ? "active" : ""}`}
+            onClick={() => setActiveRoster(roster)}
+          >
+            {roster}
+          </button>
+        ))}
+
+        <button
+          type="button"
+          className="ghp-roster-tab ghp-roster-tab-add"
+          onClick={addRoster}
+        >
+          + New Roster
+        </button>
+      </div>
 
       <section className="ghp-dash-toolbar">
         <label className="ghp-field">
@@ -634,7 +681,7 @@ export default function CoachDashboardClient() {
             type="text"
             value={newStudentName}
             onChange={(e) => setNewStudentName(e.target.value)}
-            placeholder="Add a student"
+            placeholder={`Add a student to ${activeRoster}`}
           />
         </label>
 
@@ -660,7 +707,7 @@ export default function CoachDashboardClient() {
       <section className="ghp-dash-grid">
         <div className="ghp-dash-card">
           <div className="ghp-dash-card-header">
-            <h2>Roster Sheet</h2>
+            <h2>{activeRoster} Roster</h2>
             <p>Mark attendance, behavior, and technique for the selected class date.</p>
           </div>
 
@@ -673,19 +720,13 @@ export default function CoachDashboardClient() {
               <div>View</div>
             </div>
 
-            {summaries.map((student) => {
+            {visibleSummaries.map((student) => {
               const session = getSession(student.id, selectedDate);
 
               return (
                 <div className="ghp-sheet-row" key={student.id}>
                   <div className="ghp-sheet-name">
-                    <div className="ghp-student-row-top">
-                      <div className="ghp-sheet-student">{student.name}</div>
-                      <span className={`ghp-program-badge ${getProgramClass(student.program)}`}>
-                        {getProgramLabel(student.program)}
-                      </span>
-                    </div>
-
+                    <div className="ghp-sheet-student">{student.name}</div>
                     <div className="ghp-sheet-meta">
                       {student.belt} • {student.stripes}/{getStripeMax(student.belt)}
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
@@ -730,6 +771,10 @@ export default function CoachDashboardClient() {
                 </div>
               );
             })}
+
+            {visibleSummaries.length === 0 ? (
+              <div className="ghp-sheet-empty">No students in this roster yet.</div>
+            ) : null}
           </div>
         </div>
 
@@ -740,7 +785,7 @@ export default function CoachDashboardClient() {
             <>
               <div className="ghp-dash-card-header">
                 <h2>Student Profile</h2>
-                <p>Edit core details, birthday, class, notes, and promotion status.</p>
+                <p>Edit roster, birthday, notes, and promotion status.</p>
               </div>
 
               <div className="ghp-profile-shell">
@@ -809,18 +854,18 @@ export default function CoachDashboardClient() {
                   </label>
 
                   <label className="ghp-field">
-                    <span>Program</span>
+                    <span>Roster</span>
                     <select
-                      value={selectedStudent.program || "wildlings"}
+                      value={selectedStudent.roster || "Wildlings"}
                       onChange={(e) =>
                         updateStudent(selectedStudent.id, {
-                          program: e.target.value as Program,
+                          roster: e.target.value,
                         })
                       }
                     >
-                      {PROGRAMS.map((program) => (
-                        <option key={program} value={program}>
-                          {getProgramLabel(program)}
+                      {allRosters.map((roster) => (
+                        <option key={roster} value={roster}>
+                          {roster}
                         </option>
                       ))}
                     </select>
@@ -833,8 +878,8 @@ export default function CoachDashboardClient() {
                     <strong>{selectedStudent.age ?? "—"}</strong>
                   </div>
                   <div className="ghp-stat">
-                    <span>Program</span>
-                    <strong>{getProgramLabel(selectedStudent.program)}</strong>
+                    <span>Roster</span>
+                    <strong>{selectedStudent.roster || "Wildlings"}</strong>
                   </div>
                   <div className="ghp-stat">
                     <span>Attendance Count</span>
