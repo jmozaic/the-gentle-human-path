@@ -797,7 +797,8 @@ export default function CoachDashboardClient() {
                   <label className="ghp-field">
                     <span>Birthday</span>
                     <input
-                      type="date"
+                      type="text"
+                      placeholder="YYYY-MM-DD"
                       value={selectedStudent.birthday || ""}
                       onChange={(e) =>
                         updateStudent(selectedStudent.id, {
