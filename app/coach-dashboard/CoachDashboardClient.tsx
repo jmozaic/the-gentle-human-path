@@ -147,6 +147,7 @@ export default function CoachDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [savingNote, setSavingNote] = useState(false);
   const [message, setMessage] = useState("");
+  const [birthdayDraft, setBirthdayDraft] = useState("");
 
   async function loadDashboardData() {
     setLoading(true);
@@ -208,13 +209,8 @@ export default function CoachDashboardClient() {
     });
 
     const allRosterNames = Array.from(
-      new Set(
-        studentList
-          .map((s) => (s.roster || "").trim())
-          .filter(Boolean)
-      )
+      new Set(studentList.map((s) => (s.roster || "").trim()).filter(Boolean))
     );
-
     const nonDefaultRosters = allRosterNames.filter(
       (r) => !DEFAULT_ROSTERS.includes(r)
     );
@@ -258,8 +254,7 @@ export default function CoachDashboardClient() {
   }, [selectedDate, supabase]);
 
   const allRosters = useMemo(() => {
-    const merged = [...DEFAULT_ROSTERS, ...customRosters];
-    return Array.from(new Set(merged));
+    return Array.from(new Set([...DEFAULT_ROSTERS, ...customRosters]));
   }, [customRosters]);
 
   const rosterStudents = useMemo(() => {
@@ -268,14 +263,79 @@ export default function CoachDashboardClient() {
 
   useEffect(() => {
     if (rosterStudents.length > 0) {
-      const stillVisible = rosterStudents.find((s) => s.id === selectedStudentId);
-      if (!stillVisible) {
-        setSelectedStudentId(rosterStudents[0].id);
-      }
+      const visible = rosterStudents.find((s) => s.id === selectedStudentId);
+      if (!visible) setSelectedStudentId(rosterStudents[0].id);
     } else {
       setSelectedStudentId(null);
     }
   }, [rosterStudents, selectedStudentId]);
+
+  const summaries = useMemo(() => {
+    return students.map((student) => {
+      const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
+
+      const monthSessions = allStudentSessions.filter(
+        (s) => monthKey(s.date) === monthKey(selectedDate)
+      );
+
+      const attendance = monthSessions.filter((s) => s.attendance).length;
+      const behavior = monthSessions.filter((s) => s.behavior).length;
+      const technique = monthSessions.filter((s) => s.technique).length;
+      const total = attendance + behavior + technique;
+
+      const tier = tierFromAttendance(attendance, availableClasses);
+      const goal = Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
+      const behaviorGoal = Math.ceil(attendance * 0.75);
+      const techniqueGoal = Math.ceil(attendance * 0.75);
+
+      const eligible =
+        attendance >= MIN_ATTENDANCE &&
+        total >= goal &&
+        behavior >= behaviorGoal &&
+        technique >= techniqueGoal;
+
+      const streak = getCurrentStreak(allStudentSessions);
+
+      const attendanceProgress =
+        availableClasses > 0 ? Math.min((attendance / availableClasses) * 100, 100) : 0;
+
+      const totalProgress =
+        goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
+
+      const baselineSkillGoal = Math.ceil(MIN_ATTENDANCE * 0.75);
+
+      const behaviorProgress = Math.min((behavior / baselineSkillGoal) * 100, 100);
+      const techniqueProgress = Math.min((technique / baselineSkillGoal) * 100, 100);
+
+      return {
+        ...student,
+        attendance,
+        behavior,
+        technique,
+        total,
+        goal,
+        eligible,
+        streak,
+        careerStickers: getCareerStickerTotal(student.id),
+        attendanceProgress,
+        totalProgress,
+        behaviorProgress,
+        techniqueProgress,
+        age: getAge(student.birthday),
+      };
+    });
+  }, [students, sessions, selectedDate, availableClasses]);
+
+  const visibleSummaries = summaries.filter(
+    (s) => (s.roster || "Wildlings") === activeRoster
+  );
+
+  const selectedStudent =
+    visibleSummaries.find((s) => s.id === selectedStudentId) || null;
+
+  useEffect(() => {
+    setBirthdayDraft(selectedStudent?.birthday || "");
+  }, [selectedStudent?.id, selectedStudent?.birthday]);
 
   async function saveMonthlySettings(month: string, classes: number) {
     const { error } = await supabase
@@ -288,9 +348,7 @@ export default function CoachDashboardClient() {
         { onConflict: "month" }
       );
 
-    if (error) {
-      setMessage(error.message);
-    }
+    if (error) setMessage(error.message);
   }
 
   async function addRoster() {
@@ -399,6 +457,27 @@ export default function CoachDashboardClient() {
     }
   }
 
+  async function saveBirthday(studentId: string, value: string) {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      await updateStudent(studentId, { birthday: null });
+      setMessage("");
+      return;
+    }
+
+    const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+
+    if (!isValidDate) {
+      setMessage("Birthday must be in YYYY-MM-DD format.");
+      setBirthdayDraft(selectedStudent?.birthday || "");
+      return;
+    }
+
+    await updateStudent(studentId, { birthday: trimmed });
+    setMessage("");
+  }
+
   function getSession(studentId: string, date: string): Session {
     return (
       sessions.find((s) => s.student_id === studentId && s.date === date) || {
@@ -499,69 +578,6 @@ export default function CoachDashboardClient() {
 
     return total;
   }
-
-  const summaries = useMemo(() => {
-    return students.map((student) => {
-      const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
-
-      const monthSessions = allStudentSessions.filter(
-        (s) => monthKey(s.date) === monthKey(selectedDate)
-      );
-
-      const attendance = monthSessions.filter((s) => s.attendance).length;
-      const behavior = monthSessions.filter((s) => s.behavior).length;
-      const technique = monthSessions.filter((s) => s.technique).length;
-      const total = attendance + behavior + technique;
-
-      const tier = tierFromAttendance(attendance, availableClasses);
-      const goal = Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
-      const behaviorGoal = Math.ceil(attendance * 0.75);
-      const techniqueGoal = Math.ceil(attendance * 0.75);
-
-      const eligible =
-        attendance >= MIN_ATTENDANCE &&
-        total >= goal &&
-        behavior >= behaviorGoal &&
-        technique >= techniqueGoal;
-
-      const streak = getCurrentStreak(allStudentSessions);
-
-      const attendanceProgress =
-        availableClasses > 0 ? Math.min((attendance / availableClasses) * 100, 100) : 0;
-
-      const totalProgress =
-        goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
-
-      const baselineSkillGoal = Math.ceil(MIN_ATTENDANCE * 0.75);
-
-      const behaviorProgress = Math.min((behavior / baselineSkillGoal) * 100, 100);
-      const techniqueProgress = Math.min((technique / baselineSkillGoal) * 100, 100);
-
-      return {
-        ...student,
-        attendance,
-        behavior,
-        technique,
-        total,
-        goal,
-        eligible,
-        streak,
-        careerStickers: getCareerStickerTotal(student.id),
-        attendanceProgress,
-        totalProgress,
-        behaviorProgress,
-        techniqueProgress,
-        age: getAge(student.birthday),
-      };
-    });
-  }, [students, sessions, selectedDate, availableClasses]);
-
-  const visibleSummaries = summaries.filter(
-    (s) => (s.roster || "Wildlings") === activeRoster
-  );
-
-  const selectedStudent =
-    visibleSummaries.find((s) => s.id === selectedStudentId) || null;
 
   async function awardStripe(studentId: string) {
     const student = summaries.find((s) => s.id === studentId);
@@ -712,14 +728,20 @@ export default function CoachDashboardClient() {
           </div>
 
           <div className="ghp-sheet">
-            
+            <div className="ghp-sheet-header">
+              <div className="col-name">Name</div>
+              <div className="col-center">A</div>
+              <div className="col-center">B</div>
+              <div className="col-center">T</div>
+              <div className="col-view">View</div>
+            </div>
 
             {visibleSummaries.map((student) => {
               const session = getSession(student.id, selectedDate);
 
               return (
                 <div className="ghp-sheet-row" key={student.id}>
-                  <div className="ghp-sheet-name">
+                  <div className="col-name">
                     <div className="ghp-sheet-student">{student.name}</div>
                     <div className="ghp-sheet-meta">
                       {student.belt} • {student.stripes}/{getStripeMax(student.belt)}
@@ -727,7 +749,7 @@ export default function CoachDashboardClient() {
                     </div>
                   </div>
 
-                  <div className="ghp-sheet-center">
+                  <div className="col-center">
                     <button
                       onClick={() => toggleSticker(student.id, "attendance")}
                       className={`ghp-bubble ${session.attendance ? "active-a" : ""}`}
@@ -736,7 +758,7 @@ export default function CoachDashboardClient() {
                     </button>
                   </div>
 
-                  <div className="ghp-sheet-center">
+                  <div className="col-center">
                     <button
                       onClick={() => toggleSticker(student.id, "behavior")}
                       className={`ghp-bubble ${session.behavior ? "active-b" : ""}`}
@@ -745,7 +767,7 @@ export default function CoachDashboardClient() {
                     </button>
                   </div>
 
-                  <div className="ghp-sheet-center">
+                  <div className="col-center">
                     <button
                       onClick={() => toggleSticker(student.id, "technique")}
                       className={`ghp-bubble ${session.technique ? "active-t" : ""}`}
@@ -754,7 +776,7 @@ export default function CoachDashboardClient() {
                     </button>
                   </div>
 
-                  <div className="ghp-sheet-center">
+                  <div className="col-view">
                     <button
                       onClick={() => setSelectedStudentId(student.id)}
                       className="ghp-btn ghp-btn-ghost ghp-btn-small"
@@ -838,12 +860,13 @@ export default function CoachDashboardClient() {
                     <input
                       type="text"
                       placeholder="YYYY-MM-DD"
-                      value={selectedStudent.birthday || ""}
-                      onChange={(e) =>
-                        updateStudent(selectedStudent.id, {
-                          birthday: e.target.value || null,
-                        })
-                      }
+                      value={birthdayDraft}
+                      onChange={(e) => setBirthdayDraft(e.target.value)}
+                      onBlur={() => {
+                        if (selectedStudent) {
+                          saveBirthday(selectedStudent.id, birthdayDraft);
+                        }
+                      }}
                     />
                   </label>
 
