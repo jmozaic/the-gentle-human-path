@@ -18,12 +18,17 @@ type Belt =
   | "Green"
   | "Green/Black";
 
+type Program = "wildlings" | "hunters" | "adults";
+
 type Student = {
   id: string;
   name: string;
   belt: Belt;
   stripes: number;
   notes: string;
+  photo_url?: string | null;
+  birthday?: string | null;
+  program?: Program | null;
 };
 
 type Session = {
@@ -50,6 +55,8 @@ const BELTS: Belt[] = [
   "Green",
   "Green/Black",
 ];
+
+const PROGRAMS: Program[] = ["wildlings", "hunters", "adults"];
 
 const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
   2: 0.9,
@@ -108,6 +115,37 @@ function getCurrentStreak(sessions: Session[]) {
   }
 
   return streak;
+}
+
+function getAge(birthday?: string | null) {
+  if (!birthday) return null;
+
+  const birth = new Date(birthday);
+  const now = new Date();
+
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && now.getDate() < birth.getDate())
+  ) {
+    age--;
+  }
+
+  return age;
+}
+
+function getProgramLabel(program?: Program | null) {
+  if (program === "hunters") return "Hunters";
+  if (program === "adults") return "Adults";
+  return "Wildlings";
+}
+
+function getProgramClass(program?: Program | null) {
+  if (program === "hunters") return "ghp-badge-hunters";
+  if (program === "adults") return "ghp-badge-adults";
+  return "ghp-badge-wildlings";
 }
 
 export default function CoachDashboardClient() {
@@ -178,6 +216,9 @@ export default function CoachDashboardClient() {
         belt: (student.belt || "White") as Belt,
         stripes: student.stripes || 0,
         notes: latestNote?.content || "",
+        photo_url: student.photo_url || null,
+        birthday: student.birthday || null,
+        program: (student.program || "wildlings") as Program,
       };
     });
 
@@ -258,6 +299,7 @@ export default function CoachDashboardClient() {
         belt: newStudentBelt,
         stripes: 0,
         parent_email: parentEmail,
+        program: "wildlings",
       })
       .select()
       .single();
@@ -273,6 +315,9 @@ export default function CoachDashboardClient() {
       belt: data.belt as Belt,
       stripes: data.stripes,
       notes: "",
+      photo_url: data.photo_url || null,
+      birthday: data.birthday || null,
+      program: (data.program || "wildlings") as Program,
     };
 
     setStudents((prev) => [...prev, newStudent]);
@@ -308,6 +353,9 @@ export default function CoachDashboardClient() {
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.belt !== undefined) dbUpdates.belt = updates.belt;
     if (updates.stripes !== undefined) dbUpdates.stripes = updates.stripes;
+    if (updates.birthday !== undefined) dbUpdates.birthday = updates.birthday;
+    if (updates.program !== undefined) dbUpdates.program = updates.program;
+    if (updates.photo_url !== undefined) dbUpdates.photo_url = updates.photo_url;
 
     const { error } = await supabase
       .from("students")
@@ -432,8 +480,7 @@ export default function CoachDashboardClient() {
       const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
 
       const monthSessions = allStudentSessions.filter(
-        (s) =>
-          monthKey(s.date) === monthKey(selectedDate)
+        (s) => monthKey(s.date) === monthKey(selectedDate)
       );
 
       const attendance = monthSessions.filter((s) => s.attendance).length;
@@ -482,6 +529,7 @@ export default function CoachDashboardClient() {
         totalProgress,
         behaviorProgress,
         techniqueProgress,
+        age: getAge(student.birthday),
       };
     });
   }, [students, sessions, selectedDate, availableClasses]);
@@ -540,15 +588,6 @@ export default function CoachDashboardClient() {
           <p className="ghp-dash-lead">
             A roster-first class workflow with student profiles, notes, promotions, and progress.
           </p>
-
-          <div style={{ marginTop: "12px" }}>
-            <button
-              onClick={() => window.location.href = "/invite-coach"}
-              className="ghp-btn ghp-btn-primary"
-            >
-              Invite New Coach
-            </button>
-          </div>
         </div>
 
         <div className="ghp-brand-chip">
@@ -640,9 +679,16 @@ export default function CoachDashboardClient() {
               return (
                 <div className="ghp-sheet-row" key={student.id}>
                   <div className="ghp-sheet-name">
-                    <div className="ghp-sheet-student">{student.name}</div>
+                    <div className="ghp-student-row-top">
+                      <div className="ghp-sheet-student">{student.name}</div>
+                      <span className={`ghp-program-badge ${getProgramClass(student.program)}`}>
+                        {getProgramLabel(student.program)}
+                      </span>
+                    </div>
+
                     <div className="ghp-sheet-meta">
                       {student.belt} • {student.stripes}/{getStripeMax(student.belt)}
+                      {student.age !== null ? ` • ${student.age} yrs` : ""}
                     </div>
                   </div>
 
@@ -694,7 +740,7 @@ export default function CoachDashboardClient() {
             <>
               <div className="ghp-dash-card-header">
                 <h2>Student Profile</h2>
-                <p>Edit core details, notes, promotion status, and see live progress.</p>
+                <p>Edit core details, birthday, class, notes, and promotion status.</p>
               </div>
 
               <div className="ghp-profile-shell">
@@ -747,7 +793,48 @@ export default function CoachDashboardClient() {
                   </label>
                 </div>
 
+                <div className="ghp-profile-grid">
+                  <label className="ghp-field">
+                    <span>Birthday</span>
+                    <input
+                      type="date"
+                      value={selectedStudent.birthday || ""}
+                      onChange={(e) =>
+                        updateStudent(selectedStudent.id, {
+                          birthday: e.target.value || null,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="ghp-field">
+                    <span>Program</span>
+                    <select
+                      value={selectedStudent.program || "wildlings"}
+                      onChange={(e) =>
+                        updateStudent(selectedStudent.id, {
+                          program: e.target.value as Program,
+                        })
+                      }
+                    >
+                      {PROGRAMS.map((program) => (
+                        <option key={program} value={program}>
+                          {getProgramLabel(program)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
                 <div className="ghp-stat-grid">
+                  <div className="ghp-stat">
+                    <span>Age</span>
+                    <strong>{selectedStudent.age ?? "—"}</strong>
+                  </div>
+                  <div className="ghp-stat">
+                    <span>Program</span>
+                    <strong>{getProgramLabel(selectedStudent.program)}</strong>
+                  </div>
                   <div className="ghp-stat">
                     <span>Attendance Count</span>
                     <strong>{selectedStudent.attendance}</strong>
