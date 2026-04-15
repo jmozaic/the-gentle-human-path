@@ -712,13 +712,7 @@ export default function CoachDashboardClient() {
           </div>
 
           <div className="ghp-sheet">
-            <div className="ghp-sheet-header">
-              <div>Name</div>
-              <div>A</div>
-              <div>B</div>
-              <div>T</div>
-              <div>View</div>
-            </div>
+            
 
             {visibleSummaries.map((student) => {
               const session = getSession(student.id, selectedDate);
