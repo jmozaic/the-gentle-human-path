@@ -1581,3 +1581,6 @@ h3,
   color: #6d6559;
   font-size: 14px;
 }
+.ghp-sheet-header {
+  display: none;
+}
