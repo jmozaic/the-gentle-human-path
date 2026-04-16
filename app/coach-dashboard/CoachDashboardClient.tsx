@@ -332,10 +332,13 @@ export default function CoachDashboardClient() {
       const beltA = BELTS.indexOf(a.belt);
       const beltB = BELTS.indexOf(b.belt);
 
-      if (beltA != beltB) return beltA - beltB;
+      // higher belts first
+      if (beltA != beltB) return beltB - beltA;
 
-      if (a.stripes !== b.stripes) return a.stripes - b.stripes;
-
+      // more stripes first
+      if (a.stripes !== b.stripes) return b.stripes - a.stripes;
+      
+      // then alphabetical
       return a.name.localeCompare(b.name);
     });
 
