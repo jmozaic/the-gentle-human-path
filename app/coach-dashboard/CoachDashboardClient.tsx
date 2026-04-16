@@ -326,9 +326,18 @@ export default function CoachDashboardClient() {
     });
   }, [students, sessions, selectedDate, availableClasses]);
 
-  const visibleSummaries = summaries.filter(
-    (s) => (s.roster || "Wildlings") === activeRoster
-  );
+  const visibleSummaries = summaries
+    .filter((s) => (s.roster || "Wildlings") === activeRoster)
+    .sort((a, b) => {
+      const beltA = BELTS.indexOf(a.belt);
+      const beltB = BELTS.indexOf(b.belt);
+
+      if (beltA != beltB) return beltA - beltB;
+
+      if (a.stripes !== b.stripes) return a.stripes - b.stripes;
+
+      return a.name.localeCompare(b.name);
+    });
 
   const selectedStudent =
     visibleSummaries.find((s) => s.id === selectedStudentId) || null;
