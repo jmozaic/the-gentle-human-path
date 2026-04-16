@@ -338,7 +338,18 @@ export default function CoachDashboardClient() {
       // more stripes first
       if (a.stripes !== b.stripes) return b.stripes - a.stripes;
       
-      // then alphabetical
+      // last name sort
+      const getLastName = (name: string) => {
+        const parts = name.trim().split(" ");
+        return parts[parts.length - 1].toLowerCase();
+      };
+
+      const lastA = getLastName(a.name);
+      const lastB = getLastName(b.name);
+
+      if (lastA !== lastB) return lastA.localeCompare(lastB);
+
+      // fallback: first name
       return a.name.localeCompare(b.name);
     });
 
