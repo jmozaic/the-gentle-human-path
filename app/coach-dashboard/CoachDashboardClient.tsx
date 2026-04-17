@@ -150,6 +150,37 @@ function padBirthdayPart(value: string | number) {
   return String(value).padStart(2, "0");
 }
 
+function getBirthdayThisMonth(
+  birthday?: string | null,
+  selectedDate?: string
+) {
+  if (!birthday || !selectedDate) return false;
+
+  const [, month] = birthday.split("-");
+  const selectedMonth = selectedDate.slice(5, 7);
+
+  return month === selectedMonth;
+}
+
+function getUpcomingAge(
+  birthday?: string | null,
+  selectedDate?: string
+) {
+  if (!birthday || !selectedDate) return null;
+
+  const birth = new Date(birthday);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  const selected = new Date(selectedDate);
+  return selected.getFullYear() - birth.getFullYear();
+}
+
+function formatBirthdayMD(birthday?: string | null) {
+  if (!birthday) return "";
+  const [, month, day] = birthday.split("-");
+  return `${month}-${day}`;
+}
+
 export default function CoachDashboardClient() {
   const supabase = createClient();
 
@@ -367,6 +398,14 @@ export default function CoachDashboardClient() {
       if (lastA !== lastB) return lastA.localeCompare(lastB);
 
       return a.name.localeCompare(b.name);
+    });
+
+  const birthdayStudents = summaries
+    .filter((student) => getBirthdayThisMonth(student.birthday, selectedDate))
+    .sort((a, b) => {
+      const dayA = a.birthday ? Number(a.birthday.split("-")[2]) : 0;
+      const dayB = b.birthday ? Number(b.birthday.split("-")[2]) : 0;
+      return dayA - dayB;
     });
 
   const selectedStudent =
@@ -837,306 +876,344 @@ export default function CoachDashboardClient() {
           </div>
         </div>
 
-        <div className="ghp-dash-card">
-          {!selectedStudent ? (
-            <div className="ghp-empty">Select a student.</div>
-          ) : (
-            <>
+        <div>
+          {birthdayStudents.length > 0 ? (
+            <div className="ghp-dash-card" style={{ marginBottom: "16px" }}>
               <div className="ghp-dash-card-header">
-                <h2>Student Profile</h2>
-                <p>Edit roster, birthday, notes, and promotion status.</p>
+                <h2>Birthdays This Month</h2>
+                <p>Students with birthdays during the selected month.</p>
               </div>
 
-              <div className="ghp-profile-shell">
-                <label className="ghp-field">
-                  <span>Full Name</span>
-                  <input
-                    type="text"
-                    value={selectedStudent.name}
-                    onChange={(e) =>
-                      updateStudent(selectedStudent.id, { name: e.target.value })
-                    }
-                  />
-                </label>
+              <div className="ghp-birthday-list">
+                {birthdayStudents.map((student) => (
+                  <div key={student.id} className="ghp-birthday-row">
+                    <div>
+                      <div className="ghp-sheet-student">{student.name}</div>
+                      <div className="ghp-sheet-meta">
+                        {(student.roster || "Wildlings")} • {formatBirthdayMD(student.birthday)}
+                      </div>
+                    </div>
 
-                <div className="ghp-profile-grid">
-                  <label className="ghp-field">
-                    <span>Belt</span>
-                    <select
-                      value={selectedStudent.belt}
-                      onChange={(e) =>
-                        updateStudent(selectedStudent.id, {
-                          belt: e.target.value as Belt,
-                        })
-                      }
-                    >
-                      {BELTS.map((belt) => (
-                        <option key={belt} value={belt}>
-                          {belt}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <div className="ghp-birthday-age">
+                      Turns {getUpcomingAge(student.birthday, selectedDate)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
+          <div className="ghp-dash-card">
+            {!selectedStudent ? (
+              <div className="ghp-empty">Select a student.</div>
+            ) : (
+              <>
+                <div className="ghp-dash-card-header">
+                  <h2>Student Profile</h2>
+                  <p>Edit roster, birthday, notes, and promotion status.</p>
+                </div>
+
+                <div className="ghp-profile-shell">
                   <label className="ghp-field">
-                    <span>Stripes</span>
+                    <span>Full Name</span>
                     <input
-                      type="number"
-                      min="0"
-                      max={getStripeMax(selectedStudent.belt)}
-                      value={selectedStudent.stripes}
+                      type="text"
+                      value={selectedStudent.name}
                       onChange={(e) =>
-                        updateStudent(selectedStudent.id, {
-                          stripes: Math.min(
-                            Number(e.target.value),
-                            getStripeMax(selectedStudent.belt)
-                          ),
-                        })
+                        updateStudent(selectedStudent.id, { name: e.target.value })
                       }
                     />
                   </label>
-                </div>
 
-                <label className="ghp-field">
-                  <span>Birthday</span>
-
-                  <div className="ghp-birthday-grid">
-                    <select
-                      value={birthdayMonth}
-                      onChange={async (e) => {
-                        const value = e.target.value;
-                        setBirthdayMonth(value);
-                        if (selectedStudent) {
-                          await saveBirthdayFromParts(
-                            selectedStudent.id,
-                            value,
-                            birthdayDay,
-                            birthdayYear
-                          );
+                  <div className="ghp-profile-grid">
+                    <label className="ghp-field">
+                      <span>Belt</span>
+                      <select
+                        value={selectedStudent.belt}
+                        onChange={(e) =>
+                          updateStudent(selectedStudent.id, {
+                            belt: e.target.value as Belt,
+                          })
                         }
-                      }}
-                    >
-                      <option value="">Month</option>
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const value = String(i + 1).padStart(2, "0");
-                        return (
-                          <option key={value} value={value}>
-                            {value}
+                      >
+                        {BELTS.map((belt) => (
+                          <option key={belt} value={belt}>
+                            {belt}
                           </option>
-                        );
-                      })}
-                    </select>
+                        ))}
+                      </select>
+                    </label>
 
-                    <select
-                      value={birthdayDay}
-                      onChange={async (e) => {
-                        const value = e.target.value;
-                        setBirthdayDay(value);
-                        if (selectedStudent) {
-                          await saveBirthdayFromParts(
-                            selectedStudent.id,
-                            birthdayMonth,
-                            value,
-                            birthdayYear
-                          );
+                    <label className="ghp-field">
+                      <span>Stripes</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={getStripeMax(selectedStudent.belt)}
+                        value={selectedStudent.stripes}
+                        onChange={(e) =>
+                          updateStudent(selectedStudent.id, {
+                            stripes: Math.min(
+                              Number(e.target.value),
+                              getStripeMax(selectedStudent.belt)
+                            ),
+                          })
                         }
-                      }}
-                    >
-                      <option value="">Day</option>
-                      {Array.from({ length: 31 }, (_, i) => {
-                        const value = String(i + 1).padStart(2, "0");
-                        return (
-                          <option key={value} value={value}>
-                            {value}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="ghp-field">
+                    <span>Birthday</span>
+
+                    <div className="ghp-birthday-grid">
+                      <select
+                        value={birthdayMonth}
+                        onChange={async (e) => {
+                          const value = e.target.value;
+                          setBirthdayMonth(value);
+                          if (selectedStudent) {
+                            await saveBirthdayFromParts(
+                              selectedStudent.id,
+                              value,
+                              birthdayDay,
+                              birthdayYear
+                            );
+                          }
+                        }}
+                      >
+                        <option value="">Month</option>
+                        {[
+                          { value: "01", label: "Jan" },
+                          { value: "02", label: "Feb" },
+                          { value: "03", label: "Mar" },
+                          { value: "04", label: "Apr" },
+                          { value: "05", label: "May" },
+                          { value: "06", label: "Jun" },
+                          { value: "07", label: "Jul" },
+                          { value: "08", label: "Aug" },
+                          { value: "09", label: "Sep" },
+                          { value: "10", label: "Oct" },
+                          { value: "11", label: "Nov" },
+                          { value: "12", label: "Dec" },
+                        ].map((month) => (
+                          <option key={month.value} value={month.value}>
+                            {month.label}
                           </option>
-                        );
-                      })}
-                    </select>
+                        ))}
+                      </select>
 
-                    <select
-                      value={birthdayYear}
-                      onChange={async (e) => {
-                        const value = e.target.value;
-                        setBirthdayYear(value);
-                        if (selectedStudent) {
-                          await saveBirthdayFromParts(
-                            selectedStudent.id,
-                            birthdayMonth,
-                            birthdayDay,
-                            value
+                      <select
+                        value={birthdayDay}
+                        onChange={async (e) => {
+                          const value = e.target.value;
+                          setBirthdayDay(value);
+                          if (selectedStudent) {
+                            await saveBirthdayFromParts(
+                              selectedStudent.id,
+                              birthdayMonth,
+                              value,
+                              birthdayYear
+                            );
+                          }
+                        }}
+                      >
+                        <option value="">Day</option>
+                        {Array.from({ length: 31 }, (_, i) => {
+                          const value = String(i + 1).padStart(2, "0");
+                          return (
+                            <option key={value} value={value}>
+                              {value}
+                            </option>
                           );
-                        }
-                      }}
+                        })}
+                      </select>
+
+                      <select
+                        value={birthdayYear}
+                        onChange={async (e) => {
+                          const value = e.target.value;
+                          setBirthdayYear(value);
+                          if (selectedStudent) {
+                            await saveBirthdayFromParts(
+                              selectedStudent.id,
+                              birthdayMonth,
+                              birthdayDay,
+                              value
+                            );
+                          }
+                        }}
+                      >
+                        <option value="">Year</option>
+                        {birthdayYears.map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  <label className="ghp-field">
+                    <span>Roster</span>
+                    <select
+                      value={selectedStudent.roster || "Wildlings"}
+                      onChange={(e) =>
+                        updateStudent(selectedStudent.id, {
+                          roster: e.target.value,
+                        })
+                      }
                     >
-                      <option value="">Year</option>
-                      {birthdayYears.map((year) => (
-                        <option key={year} value={year}>
-                          {year}
+                      {allRosters.map((roster) => (
+                        <option key={roster} value={roster}>
+                          {roster}
                         </option>
                       ))}
                     </select>
-                  </div>
-                </label>
+                  </label>
 
-                <label className="ghp-field">
-                  <span>Roster</span>
-                  <select
-                    value={selectedStudent.roster || "Wildlings"}
-                    onChange={(e) =>
-                      updateStudent(selectedStudent.id, {
-                        roster: e.target.value,
-                      })
-                    }
-                  >
-                    {allRosters.map((roster) => (
-                      <option key={roster} value={roster}>
-                        {roster}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="ghp-stat-grid">
-                  <div className="ghp-stat">
-                    <span>Age</span>
-                    <strong>{selectedStudent.age ?? "—"}</strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Roster</span>
-                    <strong>{selectedStudent.roster || "Wildlings"}</strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Attendance Count</span>
-                    <strong>{selectedStudent.attendance}</strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>A / B / T</span>
-                    <strong>
-                      {selectedStudent.attendance} / {selectedStudent.behavior} / {selectedStudent.technique}
-                    </strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Monthly Progress</span>
-                    <strong>
-                      {selectedStudent.total} / {selectedStudent.goal || 0}
-                    </strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Eligibility</span>
-                    <strong className={selectedStudent.eligible ? "ghp-green" : "ghp-gold"}>
-                      {selectedStudent.eligible ? "Eligible" : "Not Yet"}
-                    </strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Current Streak</span>
-                    <strong>{selectedStudent.streak}</strong>
-                  </div>
-                  <div className="ghp-stat">
-                    <span>Career Stickers</span>
-                    <strong>{selectedStudent.careerStickers}</strong>
-                  </div>
-                </div>
-
-                <div className="ghp-parent-progress-block">
-                  <div className="ghp-parent-progress-row">
-                    <div className="ghp-parent-progress-label">
-                      <span>Attendance Progress</span>
-                      <strong>{Math.round(selectedStudent.attendanceProgress)}%</strong>
+                  <div className="ghp-stat-grid">
+                    <div className="ghp-stat">
+                      <span>Age</span>
+                      <strong>{selectedStudent.age ?? "—"}</strong>
                     </div>
-                    <div className="ghp-progress">
-                      <div
-                        className="ghp-progress-fill"
-                        style={{ width: `${selectedStudent.attendanceProgress}%` }}
-                      />
+                    <div className="ghp-stat">
+                      <span>Roster</span>
+                      <strong>{selectedStudent.roster || "Wildlings"}</strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Attendance Count</span>
+                      <strong>{selectedStudent.attendance}</strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>A / B / T</span>
+                      <strong>
+                        {selectedStudent.attendance} / {selectedStudent.behavior} / {selectedStudent.technique}
+                      </strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Monthly Progress</span>
+                      <strong>
+                        {selectedStudent.total} / {selectedStudent.goal || 0}
+                      </strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Eligibility</span>
+                      <strong className={selectedStudent.eligible ? "ghp-green" : "ghp-gold"}>
+                        {selectedStudent.eligible ? "Eligible" : "Not Yet"}
+                      </strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Current Streak</span>
+                      <strong>{selectedStudent.streak}</strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Career Stickers</span>
+                      <strong>{selectedStudent.careerStickers}</strong>
                     </div>
                   </div>
 
-                  <div className="ghp-parent-progress-row">
-                    <div className="ghp-parent-progress-label">
-                      <span>Monthly Goal Progress</span>
-                      <strong>{Math.round(selectedStudent.totalProgress)}%</strong>
+                  <div className="ghp-parent-progress-block">
+                    <div className="ghp-parent-progress-row">
+                      <div className="ghp-parent-progress-label">
+                        <span>Attendance Progress</span>
+                        <strong>{Math.round(selectedStudent.attendanceProgress)}%</strong>
+                      </div>
+                      <div className="ghp-progress">
+                        <div
+                          className="ghp-progress-fill"
+                          style={{ width: `${selectedStudent.attendanceProgress}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="ghp-progress">
-                      <div
-                        className="ghp-progress-fill"
-                        style={{ width: `${selectedStudent.totalProgress}%` }}
-                      />
+
+                    <div className="ghp-parent-progress-row">
+                      <div className="ghp-parent-progress-label">
+                        <span>Monthly Goal Progress</span>
+                        <strong>{Math.round(selectedStudent.totalProgress)}%</strong>
+                      </div>
+                      <div className="ghp-progress">
+                        <div
+                          className="ghp-progress-fill"
+                          style={{ width: `${selectedStudent.totalProgress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="ghp-parent-progress-row">
+                      <div className="ghp-parent-progress-label">
+                        <span>Behavior Progress</span>
+                        <strong>{Math.round(selectedStudent.behaviorProgress)}%</strong>
+                      </div>
+                      <div className="ghp-progress">
+                        <div
+                          className="ghp-progress-fill"
+                          style={{ width: `${selectedStudent.behaviorProgress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="ghp-parent-progress-row">
+                      <div className="ghp-parent-progress-label">
+                        <span>Technique Progress</span>
+                        <strong>{Math.round(selectedStudent.techniqueProgress)}%</strong>
+                      </div>
+                      <div className="ghp-progress">
+                        <div
+                          className="ghp-progress-fill"
+                          style={{ width: `${selectedStudent.techniqueProgress}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="ghp-parent-progress-row">
-                    <div className="ghp-parent-progress-label">
-                      <span>Behavior Progress</span>
-                      <strong>{Math.round(selectedStudent.behaviorProgress)}%</strong>
-                    </div>
-                    <div className="ghp-progress">
-                      <div
-                        className="ghp-progress-fill"
-                        style={{ width: `${selectedStudent.behaviorProgress}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="ghp-parent-progress-row">
-                    <div className="ghp-parent-progress-label">
-                      <span>Technique Progress</span>
-                      <strong>{Math.round(selectedStudent.techniqueProgress)}%</strong>
-                    </div>
-                    <div className="ghp-progress">
-                      <div
-                        className="ghp-progress-fill"
-                        style={{ width: `${selectedStudent.techniqueProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <label className="ghp-field">
-                  <span>Coach Notes</span>
-                  <textarea
-                    value={selectedStudent.notes}
-                    onChange={(e) =>
-                      setStudents((prev) =>
-                        prev.map((student) =>
-                          student.id === selectedStudent.id
-                            ? { ...student, notes: e.target.value }
-                            : student
+                  <label className="ghp-field">
+                    <span>Coach Notes</span>
+                    <textarea
+                      value={selectedStudent.notes}
+                      onChange={(e) =>
+                        setStudents((prev) =>
+                          prev.map((student) =>
+                            student.id === selectedStudent.id
+                              ? { ...student, notes: e.target.value }
+                              : student
+                          )
                         )
-                      )
-                    }
-                  />
-                </label>
+                      }
+                    />
+                  </label>
 
-                <div className="ghp-profile-actions">
-                  <button
-                    onClick={() => saveNote(selectedStudent.id, selectedStudent.notes)}
-                    className="ghp-btn ghp-btn-ghost"
-                    disabled={savingNote}
-                  >
-                    {savingNote ? "Saving..." : "Save Note"}
-                  </button>
-                  <button
-                    onClick={() => awardStripe(selectedStudent.id)}
-                    className="ghp-btn ghp-btn-primary"
-                  >
-                    Award Stripe
-                  </button>
-                  <button
-                    onClick={() => promoteBelt(selectedStudent.id)}
-                    className="ghp-btn ghp-btn-ghost"
-                  >
-                    Promote Belt
-                  </button>
-                  <button
-                    onClick={() => deleteStudent(selectedStudent.id)}
-                    className="ghp-btn ghp-btn-danger"
-                  >
-                    Delete Student
-                  </button>
+                  <div className="ghp-profile-actions">
+                    <button
+                      onClick={() => saveNote(selectedStudent.id, selectedStudent.notes)}
+                      className="ghp-btn ghp-btn-ghost"
+                      disabled={savingNote}
+                    >
+                      {savingNote ? "Saving..." : "Save Note"}
+                    </button>
+                    <button
+                      onClick={() => awardStripe(selectedStudent.id)}
+                      className="ghp-btn ghp-btn-primary"
+                    >
+                      Award Stripe
+                    </button>
+                    <button
+                      onClick={() => promoteBelt(selectedStudent.id)}
+                      className="ghp-btn ghp-btn-ghost"
+                    >
+                      Promote Belt
+                    </button>
+                    <button
+                      onClick={() => deleteStudent(selectedStudent.id)}
+                      className="ghp-btn ghp-btn-danger"
+                    >
+                      Delete Student
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </section>
     </main>

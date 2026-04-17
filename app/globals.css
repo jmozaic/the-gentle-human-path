@@ -1601,3 +1601,34 @@ h3,
   grid-template-columns: 1fr 1fr 1.2fr;
   gap: 10px;
 }
+.ghp-birthday-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 10px;
+}
+
+.ghp-birthday-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ghp-birthday-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3eee6;
+}
+
+.ghp-birthday-row:last-child {
+  border-bottom: 0;
+}
+
+.ghp-birthday-age {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a741f;
+}
