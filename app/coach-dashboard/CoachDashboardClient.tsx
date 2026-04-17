@@ -132,6 +132,24 @@ function getAge(birthday?: string | null) {
   return age;
 }
 
+function getBirthdayParts(birthday?: string | null) {
+  if (!birthday) {
+    return { month: "", day: "", year: "" };
+  }
+
+  const [year, month, day] = birthday.split("-");
+
+  return {
+    month: month || "",
+    day: day || "",
+    year: year || "",
+  };
+}
+
+function padBirthdayPart(value: string | number) {
+  return String(value).padStart(2, "0");
+}
+
 export default function CoachDashboardClient() {
   const supabase = createClient();
 
@@ -147,7 +165,10 @@ export default function CoachDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [savingNote, setSavingNote] = useState(false);
   const [message, setMessage] = useState("");
-  const [birthdayDraft, setBirthdayDraft] = useState("");
+
+  const [birthdayMonth, setBirthdayMonth] = useState("");
+  const [birthdayDay, setBirthdayDay] = useState("");
+  const [birthdayYear, setBirthdayYear] = useState("");
 
   async function loadDashboardData() {
     setLoading(true);
@@ -332,13 +353,9 @@ export default function CoachDashboardClient() {
       const beltA = BELTS.indexOf(a.belt);
       const beltB = BELTS.indexOf(b.belt);
 
-      // higher belts first
-      if (beltA != beltB) return beltB - beltA;
-
-      // more stripes first
+      if (beltA !== beltB) return beltB - beltA;
       if (a.stripes !== b.stripes) return b.stripes - a.stripes;
-      
-      // last name sort
+
       const getLastName = (name: string) => {
         const parts = name.trim().split(" ");
         return parts[parts.length - 1].toLowerCase();
@@ -349,7 +366,6 @@ export default function CoachDashboardClient() {
 
       if (lastA !== lastB) return lastA.localeCompare(lastB);
 
-      // fallback: first name
       return a.name.localeCompare(b.name);
     });
 
@@ -357,8 +373,16 @@ export default function CoachDashboardClient() {
     visibleSummaries.find((s) => s.id === selectedStudentId) || null;
 
   useEffect(() => {
-    setBirthdayDraft(selectedStudent?.birthday || "");
+    const parts = getBirthdayParts(selectedStudent?.birthday || null);
+    setBirthdayMonth(parts.month);
+    setBirthdayDay(parts.day);
+    setBirthdayYear(parts.year);
   }, [selectedStudent?.id, selectedStudent?.birthday]);
+
+  const birthdayYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 101 }, (_, i) => String(currentYear - i));
+  }, []);
 
   async function saveMonthlySettings(month: string, classes: number) {
     const { error } = await supabase
@@ -480,24 +504,20 @@ export default function CoachDashboardClient() {
     }
   }
 
-  async function saveBirthday(studentId: string, value: string) {
-    const trimmed = value.trim();
-
-    if (!trimmed) {
+  async function saveBirthdayFromParts(
+    studentId: string,
+    month: string,
+    day: string,
+    year: string
+  ) {
+    if (!month || !day || !year) {
       await updateStudent(studentId, { birthday: null });
       setMessage("");
       return;
     }
 
-    const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
-
-    if (!isValidDate) {
-      setMessage("Birthday must be in YYYY-MM-DD format.");
-      setBirthdayDraft(selectedStudent?.birthday || "");
-      return;
-    }
-
-    await updateStudent(studentId, { birthday: trimmed });
+    const formatted = `${year}-${padBirthdayPart(month)}-${padBirthdayPart(day)}`;
+    await updateStudent(studentId, { birthday: formatted });
     setMessage("");
   }
 
@@ -877,40 +897,104 @@ export default function CoachDashboardClient() {
                   </label>
                 </div>
 
-                <div className="ghp-profile-grid">
-                  <label className="ghp-field">
-                    <span>Birthday</span>
-                    <input
-                      type="text"
-                      placeholder="YYYY-MM-DD"
-                      value={birthdayDraft}
-                      onChange={(e) => setBirthdayDraft(e.target.value)}
-                      onBlur={() => {
+                <label className="ghp-field">
+                  <span>Birthday</span>
+
+                  <div className="ghp-birthday-grid">
+                    <select
+                      value={birthdayMonth}
+                      onChange={async (e) => {
+                        const value = e.target.value;
+                        setBirthdayMonth(value);
                         if (selectedStudent) {
-                          saveBirthday(selectedStudent.id, birthdayDraft);
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            value,
+                            birthdayDay,
+                            birthdayYear
+                          );
                         }
                       }}
-                    />
-                  </label>
-
-                  <label className="ghp-field">
-                    <span>Roster</span>
-                    <select
-                      value={selectedStudent.roster || "Wildlings"}
-                      onChange={(e) =>
-                        updateStudent(selectedStudent.id, {
-                          roster: e.target.value,
-                        })
-                      }
                     >
-                      {allRosters.map((roster) => (
-                        <option key={roster} value={roster}>
-                          {roster}
+                      <option value="">Month</option>
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const value = String(i + 1).padStart(2, "0");
+                        return (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <select
+                      value={birthdayDay}
+                      onChange={async (e) => {
+                        const value = e.target.value;
+                        setBirthdayDay(value);
+                        if (selectedStudent) {
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            birthdayMonth,
+                            value,
+                            birthdayYear
+                          );
+                        }
+                      }}
+                    >
+                      <option value="">Day</option>
+                      {Array.from({ length: 31 }, (_, i) => {
+                        const value = String(i + 1).padStart(2, "0");
+                        return (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <select
+                      value={birthdayYear}
+                      onChange={async (e) => {
+                        const value = e.target.value;
+                        setBirthdayYear(value);
+                        if (selectedStudent) {
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            birthdayMonth,
+                            birthdayDay,
+                            value
+                          );
+                        }
+                      }}
+                    >
+                      <option value="">Year</option>
+                      {birthdayYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
                         </option>
                       ))}
                     </select>
-                  </label>
-                </div>
+                  </div>
+                </label>
+
+                <label className="ghp-field">
+                  <span>Roster</span>
+                  <select
+                    value={selectedStudent.roster || "Wildlings"}
+                    onChange={(e) =>
+                      updateStudent(selectedStudent.id, {
+                        roster: e.target.value,
+                      })
+                    }
+                  >
+                    {allRosters.map((roster) => (
+                      <option key={roster} value={roster}>
+                        {roster}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
                 <div className="ghp-stat-grid">
                   <div className="ghp-stat">

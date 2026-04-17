@@ -1584,3 +1584,20 @@ h3,
 .ghp-sheet-header {
   display: none;
 }
+/* force-hide the roster header row */
+.ghp-sheet > .ghp-sheet-header {
+  display: none !important;
+}
+
+.ghp-sheet > div:first-child.ghp-sheet-header {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.ghp-birthday-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 10px;
+}
