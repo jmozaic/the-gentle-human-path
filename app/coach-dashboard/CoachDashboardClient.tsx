@@ -56,12 +56,12 @@ const BELTS: Belt[] = [
 const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
 const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
-  2: 0.9,
-  3: 0.8,
-  4: 0.7,
+  2: 1.0,
+  3: 0.9,
+  4: 0.8,
 };
 
-const MIN_ATTENDANCE = 6;
+const MIN_ATTENDANCE = 8;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -337,8 +337,8 @@ export default function CoachDashboardClient() {
 
       const tier = tierFromAttendance(attendance, availableClasses);
       const goal = Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
-      const behaviorGoal = Math.ceil(attendance * 0.75);
-      const techniqueGoal = Math.ceil(attendance * 0.75);
+      const behaviorGoal = Math.ceil(attendance * 0.8);
+      const techniqueGoal = Math.ceil(attendance * 0.8);
 
       const eligible =
         attendance >= MIN_ATTENDANCE &&
