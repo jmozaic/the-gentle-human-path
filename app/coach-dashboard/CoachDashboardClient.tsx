@@ -153,10 +153,6 @@ function isAdultStudent(student?: { roster?: string | null }) {
   return (student?.roster || "") === "Adults";
 }
 
-function isBlackBelt(student?: { belt?: Belt }) {
-  return student?.belt === "Black";
-}
-
 function getStripeMax(student?: { roster?: string | null }) {
   return isAdultStudent(student) ? 4 : 12;
 }
@@ -704,7 +700,10 @@ export default function CoachDashboardClient() {
         yearsAtBelt >= minYearsAtBelt;
 
       const eligible = adult
-        ? attendance >= MIN_ATTENDANCE || fastTrackReview || adultNextBeltEligible || blackDegreeEligible
+        ? attendance >= MIN_ATTENDANCE ||
+          fastTrackReview ||
+          adultNextBeltEligible ||
+          blackDegreeEligible
         : attendance >= MIN_ATTENDANCE &&
           total >= goal &&
           behavior >= behaviorGoal &&
@@ -1073,6 +1072,23 @@ export default function CoachDashboardClient() {
     });
   }
 
+  async function awardBlackBeltDegree(studentId: string) {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+
+    const currentDegree = Number(student.black_belt_degree || 0);
+
+    if (currentDegree >= 9) {
+      alert("This student is already at the highest black belt degree.");
+      return;
+    }
+
+    await updateStudent(studentId, {
+      black_belt_degree: currentDegree + 1,
+      belt_awarded_at: today(),
+    });
+  }
+
   const selectedBeltOptions = activeRoster === "Adults" ? ADULT_BELTS : KIDS_BELTS;
 
   if (loading) {
@@ -1203,31 +1219,31 @@ export default function CoachDashboardClient() {
           </div>
 
           <div className="ghp-sheet">
-            <div className="ghp-sheet-header">
-              <div className="col-name">Name</div>
-              <div className="col-center">A</div>
-              <div className="col-center">B</div>
-              <div className="col-center">T</div>
-              <div className="col-view">View</div>
-            </div>
-
             {visibleSummaries.map((student) => {
               const session = getSession(student.id, selectedDate);
+              const isEligibleTab = activeRoster === "Eligible";
 
               return (
-                <div className="ghp-sheet-row" key={student.id}>
+                <div
+                  className="ghp-sheet-row"
+                  key={student.id}
+                  style={
+                    isEligibleTab
+                      ? { gridTemplateColumns: "minmax(180px, 1fr) 220px" }
+                      : undefined
+                  }
+                >
                   <div className="col-name">
                     <div className="ghp-sheet-student">{student.name}</div>
+
                     <div className="ghp-sheet-meta">
                       {student.belt}
                       {student.blackBelt
                         ? ` • ${student.blackDegree} degree`
                         : ` • ${student.stripes}/${student.stripeMax} stripes`}
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
-                      {student.fastTrackReview
-                        ? ` • Fast Track ${student.fastTrackAverage.toFixed(1)}x/wk`
-                        : ""}
-                      {activeRoster === "Eligible"
+                      {student.fastTrackReview ? " • Fast Track Review" : ""}
+                      {isEligibleTab
                         ? ` • ${student.promotionStatus} • Belt size: ${
                             student.belt_size || "Not set"
                           }`
@@ -1235,45 +1251,74 @@ export default function CoachDashboardClient() {
                     </div>
                   </div>
 
-                  <div className="col-center">
-                    <button
-                      onClick={() => toggleSticker(student.id, "attendance")}
-                      className={`ghp-bubble ${session.attendance ? "active-a" : ""}`}
-                    >
-                      A
-                    </button>
-                  </div>
+                  {isEligibleTab ? (
+                    <div className="col-view">
+                      {student.blackBelt ? (
+                        <button
+                          onClick={() => awardBlackBeltDegree(student.id)}
+                          className="ghp-btn ghp-btn-primary"
+                        >
+                          Award Degree
+                        </button>
+                      ) : student.promotionStatus.includes("next belt") ? (
+                        <button
+                          onClick={() => promoteBelt(student.id)}
+                          className="ghp-btn ghp-btn-primary"
+                        >
+                          Promote Belt
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => awardStripe(student.id)}
+                          className="ghp-btn ghp-btn-primary"
+                        >
+                          Award Stripe
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="col-center">
+                        <button
+                          onClick={() => toggleSticker(student.id, "attendance")}
+                          className={`ghp-bubble ${session.attendance ? "active-a" : ""}`}
+                        >
+                          A
+                        </button>
+                      </div>
 
-                  <div className="col-center">
-                    {!student.adult ? (
-                      <button
-                        onClick={() => toggleSticker(student.id, "behavior")}
-                        className={`ghp-bubble ${session.behavior ? "active-b" : ""}`}
-                      >
-                        B
-                      </button>
-                    ) : null}
-                  </div>
+                      <div className="col-center">
+                        {!student.adult ? (
+                          <button
+                            onClick={() => toggleSticker(student.id, "behavior")}
+                            className={`ghp-bubble ${session.behavior ? "active-b" : ""}`}
+                          >
+                            B
+                          </button>
+                        ) : null}
+                      </div>
 
-                  <div className="col-center">
-                    {!student.adult ? (
-                      <button
-                        onClick={() => toggleSticker(student.id, "technique")}
-                        className={`ghp-bubble ${session.technique ? "active-t" : ""}`}
-                      >
-                        T
-                      </button>
-                    ) : null}
-                  </div>
+                      <div className="col-center">
+                        {!student.adult ? (
+                          <button
+                            onClick={() => toggleSticker(student.id, "technique")}
+                            className={`ghp-bubble ${session.technique ? "active-t" : ""}`}
+                          >
+                            T
+                          </button>
+                        ) : null}
+                      </div>
 
-                  <div className="col-view">
-                    <button
-                      onClick={() => setSelectedStudentId(student.id)}
-                      className="ghp-btn ghp-btn-ghost ghp-btn-small"
-                    >
-                      View
-                    </button>
-                  </div>
+                      <div className="col-view">
+                        <button
+                          onClick={() => setSelectedStudentId(student.id)}
+                          className="ghp-btn ghp-btn-ghost ghp-btn-small"
+                        >
+                          View
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1723,7 +1768,14 @@ export default function CoachDashboardClient() {
                       >
                         Award Stripe
                       </button>
-                    ) : null}
+                    ) : (
+                      <button
+                        onClick={() => awardBlackBeltDegree(selectedStudent.id)}
+                        className="ghp-btn ghp-btn-primary"
+                      >
+                        Award Degree
+                      </button>
+                    )}
 
                     <button
                       onClick={() => promoteBelt(selectedStudent.id)}
