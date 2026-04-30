@@ -16,7 +16,11 @@ type Belt =
   | "Orange/Black"
   | "Green/White"
   | "Green"
-  | "Green/Black";
+  | "Green/Black"
+  | "Blue"
+  | "Purple"
+  | "Brown"
+  | "Black";
 
 type Student = {
   id: string;
@@ -27,6 +31,8 @@ type Student = {
   birthday?: string | null;
   roster?: string | null;
   belt_size?: string | null;
+  belt_awarded_at?: string | null;
+  adult_skill_ratings?: Record<string, number> | null;
 };
 
 type Session = {
@@ -38,7 +44,7 @@ type Session = {
   technique: boolean;
 };
 
-const BELTS: Belt[] = [
+const KIDS_BELTS: Belt[] = [
   "White",
   "Gray/White",
   "Gray",
@@ -54,6 +60,28 @@ const BELTS: Belt[] = [
   "Green/Black",
 ];
 
+const ADULT_BELTS: Belt[] = ["White", "Blue", "Purple", "Brown", "Black"];
+
+const ALL_BELTS: Belt[] = [
+  "White",
+  "Gray/White",
+  "Gray",
+  "Gray/Black",
+  "Yellow/White",
+  "Yellow",
+  "Yellow/Black",
+  "Orange/White",
+  "Orange",
+  "Orange/Black",
+  "Green/White",
+  "Green",
+  "Green/Black",
+  "Blue",
+  "Purple",
+  "Brown",
+  "Black",
+];
+
 const DEFAULT_ROSTERS = ["Eligible", "Wildlings", "Hunters", "Adults"];
 const REAL_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
@@ -65,6 +93,44 @@ const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
 
 const MIN_ATTENDANCE = 8;
 
+const ADULT_MIN_YEARS: Record<string, number> = {
+  White: 2,
+  Blue: 3,
+  Purple: 3,
+  Brown: 2,
+  Black: 0,
+};
+
+const ADULT_SKILL_CATEGORIES = [
+  "Judo Throws",
+  "Wrestling",
+  "Wrestling Defense",
+  "Pulling Guard",
+  "Closed Guard",
+  "Open Guard",
+  "Half Guard",
+  "Seated Guard",
+  "Passing Standing",
+  "Passing Tripod",
+  "Passing Kneeling",
+  "Passing Half Guard",
+  "Side Control Top",
+  "Side Control Bottom",
+  "Turtle Top",
+  "Turtle Bottom",
+  "North South Top",
+  "North South Bottom",
+  "Knee on Belly Top",
+  "Knee on Belly Bottom",
+  "Mount Top",
+  "Mount Bottom",
+  "Back Mount",
+  "Back Escape",
+  "Submissions",
+  "Headlock Escapes",
+  "Competition Readiness",
+];
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -73,8 +139,12 @@ function monthKey(dateString: string): string {
   return dateString.slice(0, 7);
 }
 
-function getStripeMax() {
-  return 12;
+function isAdultStudent(student?: { roster?: string | null }) {
+  return (student?.roster || "") === "Adults";
+}
+
+function getStripeMax(student?: { roster?: string | null }) {
+  return isAdultStudent(student) ? 4 : 12;
 }
 
 function tierFromAttendance(
@@ -164,8 +234,55 @@ function formatBirthdayMD(birthday?: string | null) {
   return `${month}-${day}`;
 }
 
-function getPromotionStatus(stripes: number) {
-  return stripes >= 12 ? "Ready for next belt" : "Ready for stripe";
+function getYearsAtBelt(beltAwardedAt?: string | null) {
+  if (!beltAwardedAt) return 0;
+
+  const start = new Date(beltAwardedAt);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  const now = new Date();
+  let years = now.getFullYear() - start.getFullYear();
+  const m = now.getMonth() - start.getMonth();
+
+  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--;
+
+  return years;
+}
+
+function getAdultMinYears(belt: Belt) {
+  return ADULT_MIN_YEARS[belt] ?? 0;
+}
+
+function getSkillAverage(ratings?: Record<string, number> | null) {
+  if (!ratings) return 0;
+
+  const total = ADULT_SKILL_CATEGORIES.reduce((sum, category) => {
+    return sum + Number(ratings[category] || 0);
+  }, 0);
+
+  return total / ADULT_SKILL_CATEGORIES.length;
+}
+
+function getPromotionStatus(student: Student) {
+  if (isAdultStudent(student)) {
+    if (student.belt === "Black") return "Black belt";
+
+    const max = getStripeMax(student);
+    const yearsAtBelt = getYearsAtBelt(student.belt_awarded_at);
+    const minYears = getAdultMinYears(student.belt);
+
+    if (student.stripes >= max && yearsAtBelt >= minYears) {
+      return "Eligible for next belt";
+    }
+
+    if (student.stripes >= max && yearsAtBelt < minYears) {
+      return `Needs time at belt (${yearsAtBelt}/${minYears} yrs)`;
+    }
+
+    return "Eligible for stripe review";
+  }
+
+  return student.stripes >= 12 ? "Eligible for next belt" : "Eligible for stripe";
 }
 
 function getBeltClass(belt: Belt) {
@@ -173,25 +290,35 @@ function getBeltClass(belt: Belt) {
   if (belt.includes("Yellow")) return "ghp-belt-yellow";
   if (belt.includes("Orange")) return "ghp-belt-orange";
   if (belt.includes("Green")) return "ghp-belt-green";
+  if (belt === "Blue") return "ghp-belt-blue";
+  if (belt === "Purple") return "ghp-belt-purple";
+  if (belt === "Brown") return "ghp-belt-brown";
+  if (belt === "Black") return "ghp-belt-black";
   return "ghp-belt-white";
 }
 
-function StripeDisplay({ stripes }: { stripes: number }) {
-  const total = 12;
-
+function StripeDisplay({
+  stripes,
+  max,
+}: {
+  stripes: number;
+  max: number;
+}) {
   return (
     <div className="ghp-stripes">
-      {Array.from({ length: total }, (_, i) => {
+      {Array.from({ length: max }, (_, i) => {
         const stripeNumber = i + 1;
         const isEarned = stripeNumber <= stripes;
         let colorClass = "ghp-stripe-white";
 
-        if (stripeNumber >= 5 && stripeNumber <= 8) {
-          colorClass = "ghp-stripe-yellow";
-        }
+        if (max === 12) {
+          if (stripeNumber >= 5 && stripeNumber <= 8) {
+            colorClass = "ghp-stripe-yellow";
+          }
 
-        if (stripeNumber >= 9) {
-          colorClass = "ghp-stripe-red";
+          if (stripeNumber >= 9) {
+            colorClass = "ghp-stripe-red";
+          }
         }
 
         return (
@@ -205,7 +332,15 @@ function StripeDisplay({ stripes }: { stripes: number }) {
   );
 }
 
-function BeltIcon({ belt, stripes }: { belt: Belt; stripes: number }) {
+function BeltIcon({
+  belt,
+  stripes,
+  max,
+}: {
+  belt: Belt;
+  stripes: number;
+  max: number;
+}) {
   return (
     <div className="ghp-belt-card">
       <div className={`ghp-belt-icon ${getBeltClass(belt)}`}>
@@ -214,8 +349,10 @@ function BeltIcon({ belt, stripes }: { belt: Belt; stripes: number }) {
 
       <div>
         <div className="ghp-belt-title">{belt}</div>
-        <div className="ghp-belt-subtitle">{stripes}/12 stripes</div>
-        <StripeDisplay stripes={stripes} />
+        <div className="ghp-belt-subtitle">
+          {stripes}/{max} stripes
+        </div>
+        <StripeDisplay stripes={stripes} max={max} />
       </div>
     </div>
   );
@@ -298,6 +435,8 @@ export default function CoachDashboardClient() {
         birthday: student.birthday || null,
         roster: student.roster || "Wildlings",
         belt_size: student.belt_size || "",
+        belt_awarded_at: student.belt_awarded_at || null,
+        adult_skill_ratings: student.adult_skill_ratings || {},
       };
     });
 
@@ -351,7 +490,6 @@ export default function CoachDashboardClient() {
 
   const rosterStudents = useMemo(() => {
     if (activeRoster === "Eligible") return students;
-
     return students.filter((s) => (s.roster || "Wildlings") === activeRoster);
   }, [students, activeRoster]);
 
@@ -379,6 +517,7 @@ export default function CoachDashboardClient() {
 
   const summaries = useMemo(() => {
     return students.map((student) => {
+      const adult = isAdultStudent(student);
       const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
 
       const monthSessions = allStudentSessions.filter(
@@ -386,29 +525,34 @@ export default function CoachDashboardClient() {
       );
 
       const attendance = monthSessions.filter((s) => s.attendance).length;
-      const behavior = monthSessions.filter((s) => s.behavior).length;
-      const technique = monthSessions.filter((s) => s.technique).length;
-      const total = attendance + behavior + technique;
+      const behavior = adult ? 0 : monthSessions.filter((s) => s.behavior).length;
+      const technique = adult ? 0 : monthSessions.filter((s) => s.technique).length;
+      const total = adult ? attendance : attendance + behavior + technique;
 
       const tier = tierFromAttendance(attendance, availableClasses);
-      const goal = Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
+      const goal = adult
+        ? MIN_ATTENDANCE
+        : Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
 
-      const behaviorGoal = Math.ceil(attendance * 0.8);
-      const techniqueGoal = Math.ceil(attendance * 0.8);
+      const behaviorGoal = adult ? 0 : Math.ceil(attendance * 0.8);
+      const techniqueGoal = adult ? 0 : Math.ceil(attendance * 0.8);
 
-      const eligible =
-        attendance >= MIN_ATTENDANCE &&
-        total >= goal &&
-        behavior >= behaviorGoal &&
-        technique >= techniqueGoal;
+      const fastTrackReview =
+        adult && attendance >= 8 && attendance >= Math.ceil(availableClasses * 0.9);
+
+      const eligible = adult
+        ? attendance >= MIN_ATTENDANCE
+        : attendance >= MIN_ATTENDANCE &&
+          total >= goal &&
+          behavior >= behaviorGoal &&
+          technique >= techniqueGoal;
 
       const streak = getCurrentStreak(allStudentSessions);
 
       const attendanceProgress =
         availableClasses > 0 ? Math.min((attendance / availableClasses) * 100, 100) : 0;
 
-      const totalProgress =
-        goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
+      const totalProgress = goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
 
       const behaviorProgress =
         behaviorGoal > 0 ? Math.min((behavior / behaviorGoal) * 100, 100) : 0;
@@ -416,14 +560,20 @@ export default function CoachDashboardClient() {
       const techniqueProgress =
         techniqueGoal > 0 ? Math.min((technique / techniqueGoal) * 100, 100) : 0;
 
+      const yearsAtBelt = getYearsAtBelt(student.belt_awarded_at);
+      const minYearsAtBelt = adult ? getAdultMinYears(student.belt) : 0;
+      const skillAverage = adult ? getSkillAverage(student.adult_skill_ratings) : 0;
+
       return {
         ...student,
+        adult,
         attendance,
         behavior,
         technique,
         total,
         goal,
         eligible,
+        fastTrackReview,
         streak,
         careerStickers: getCareerStickerTotal(student.id),
         attendanceProgress,
@@ -431,19 +581,24 @@ export default function CoachDashboardClient() {
         behaviorProgress,
         techniqueProgress,
         age: getAge(student.birthday),
-        promotionStatus: getPromotionStatus(student.stripes || 0),
+        promotionStatus: getPromotionStatus(student),
+        stripeMax: getStripeMax(student),
+        yearsAtBelt,
+        minYearsAtBelt,
+        skillAverage,
       };
     });
   }, [students, sessions, selectedDate, availableClasses]);
 
   const visibleSummaries = summaries
     .filter((s) => {
-      if (activeRoster === "Eligible") return s.eligible;
+      if (activeRoster === "Eligible") return s.eligible || s.fastTrackReview;
       return (s.roster || "Wildlings") === activeRoster;
     })
     .sort((a, b) => {
-      const beltA = BELTS.indexOf(a.belt);
-      const beltB = BELTS.indexOf(b.belt);
+      const beltList = a.adult || b.adult ? ADULT_BELTS : KIDS_BELTS;
+      const beltA = beltList.indexOf(a.belt);
+      const beltB = beltList.indexOf(b.belt);
 
       if (beltA !== beltB) return beltB - beltA;
       if (a.stripes !== b.stripes) return b.stripes - a.stripes;
@@ -520,6 +675,7 @@ export default function CoachDashboardClient() {
 
     const parentEmail = prompt("Enter parent email for this student") || "";
     const targetRoster = activeRoster === "Eligible" ? "Wildlings" : activeRoster;
+    const adult = targetRoster === "Adults";
 
     const { data, error } = await supabase
       .from("students")
@@ -530,6 +686,8 @@ export default function CoachDashboardClient() {
         parent_email: parentEmail,
         roster: targetRoster,
         belt_size: "",
+        belt_awarded_at: today(),
+        adult_skill_ratings: adult ? {} : {},
       })
       .select()
       .single();
@@ -548,6 +706,8 @@ export default function CoachDashboardClient() {
       birthday: data.birthday || null,
       roster: data.roster || targetRoster,
       belt_size: data.belt_size || "",
+      belt_awarded_at: data.belt_awarded_at || today(),
+      adult_skill_ratings: data.adult_skill_ratings || {},
     };
 
     setStudents((prev) => [...prev, newStudent]);
@@ -586,6 +746,10 @@ export default function CoachDashboardClient() {
     if (updates.birthday !== undefined) dbUpdates.birthday = updates.birthday;
     if (updates.roster !== undefined) dbUpdates.roster = updates.roster;
     if (updates.belt_size !== undefined) dbUpdates.belt_size = updates.belt_size;
+    if (updates.belt_awarded_at !== undefined) dbUpdates.belt_awarded_at = updates.belt_awarded_at;
+    if (updates.adult_skill_ratings !== undefined) {
+      dbUpdates.adult_skill_ratings = updates.adult_skill_ratings;
+    }
 
     const { error } = await supabase
       .from("students")
@@ -623,6 +787,18 @@ export default function CoachDashboardClient() {
     const formatted = `${year}-${padBirthdayPart(month)}-${padBirthdayPart(day)}`;
     await updateStudent(studentId, { birthday: formatted });
     setMessage("");
+  }
+
+  async function updateAdultSkill(student: Student, category: string, value: number) {
+    const safeValue = Math.max(0, Math.min(10, value));
+    const updatedRatings = {
+      ...(student.adult_skill_ratings || {}),
+      [category]: safeValue,
+    };
+
+    await updateStudent(student.id, {
+      adult_skill_ratings: updatedRatings,
+    });
   }
 
   function getSession(studentId: string, date: string): Session {
@@ -717,13 +893,13 @@ export default function CoachDashboardClient() {
     const student = summaries.find((s) => s.id === studentId);
     if (!student) return;
 
-    if (!student.eligible) {
-      alert("This student is not eligible for a stripe yet.");
+    if (!student.eligible && !student.fastTrackReview) {
+      alert("This student is not eligible for a stripe review yet.");
       return;
     }
 
     await updateStudent(studentId, {
-      stripes: Math.min(student.stripes + 1, getStripeMax()),
+      stripes: Math.min(student.stripes + 1, getStripeMax(student)),
     });
   }
 
@@ -731,8 +907,9 @@ export default function CoachDashboardClient() {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
 
-    const currentIndex = BELTS.indexOf(student.belt);
-    const nextBelt = BELTS[currentIndex + 1];
+    const beltList = isAdultStudent(student) ? ADULT_BELTS : KIDS_BELTS;
+    const currentIndex = beltList.indexOf(student.belt);
+    const nextBelt = beltList[currentIndex + 1];
 
     if (!nextBelt) {
       alert("This student is already at the top belt.");
@@ -742,8 +919,12 @@ export default function CoachDashboardClient() {
     await updateStudent(studentId, {
       belt: nextBelt,
       stripes: 0,
+      belt_awarded_at: today(),
     });
   }
+
+  const selectedBeltOptions =
+    activeRoster === "Adults" ? ADULT_BELTS : KIDS_BELTS;
 
   if (loading) {
     return (
@@ -762,7 +943,7 @@ export default function CoachDashboardClient() {
           <p className="ghp-kicker">Coach Dashboard</p>
           <h1 className="ghp-dash-title">The Gentle Human Path Admin</h1>
           <p className="ghp-dash-lead">
-            Organize students by roster, track A / B / T, and manage each profile.
+            Organize students by roster, track progress, and manage each profile.
           </p>
         </div>
 
@@ -787,7 +968,10 @@ export default function CoachDashboardClient() {
             key={roster}
             type="button"
             className={`ghp-roster-tab ${activeRoster === roster ? "active" : ""}`}
-            onClick={() => setActiveRoster(roster)}
+            onClick={() => {
+              setActiveRoster(roster);
+              setNewStudentBelt(roster === "Adults" ? "White" : "White");
+            }}
           >
             {roster}
           </button>
@@ -843,7 +1027,7 @@ export default function CoachDashboardClient() {
             value={newStudentBelt}
             onChange={(e) => setNewStudentBelt(e.target.value as Belt)}
           >
-            {BELTS.map((belt) => (
+            {selectedBeltOptions.map((belt) => (
               <option key={belt} value={belt}>
                 {belt}
               </option>
@@ -862,7 +1046,9 @@ export default function CoachDashboardClient() {
             <h2>{activeRoster} Roster</h2>
             <p>
               {activeRoster === "Eligible"
-                ? "Students who are ready for a stripe or belt promotion."
+                ? "Students who need stripe, belt, or fast-track review."
+                : activeRoster === "Adults"
+                ? "Adults use attendance only and separate skill evaluation criteria."
                 : "Mark attendance, behavior, and technique for the selected class date."}
             </p>
           </div>
@@ -871,8 +1057,12 @@ export default function CoachDashboardClient() {
             <div className="ghp-sheet-header">
               <div className="col-name">Name</div>
               <div className="col-center">A</div>
-              <div className="col-center">B</div>
-              <div className="col-center">T</div>
+              {activeRoster !== "Adults" && (
+                <>
+                  <div className="col-center">B</div>
+                  <div className="col-center">T</div>
+                </>
+              )}
               <div className="col-view">View</div>
             </div>
 
@@ -880,12 +1070,21 @@ export default function CoachDashboardClient() {
               const session = getSession(student.id, selectedDate);
 
               return (
-                <div className="ghp-sheet-row" key={student.id}>
+                <div
+                  className={`ghp-sheet-row ${
+                    student.adult ? "ghp-sheet-row-adult" : ""
+                  }`}
+                  key={student.id}
+                >
                   <div className="col-name">
                     <div className="ghp-sheet-student">{student.name}</div>
                     <div className="ghp-sheet-meta">
-                      {student.belt} • {student.stripes}/12 stripes
+                      {student.belt} • {student.stripes}/{student.stripeMax} stripes
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
+                      {student.adult
+                        ? ` • ${student.yearsAtBelt}/${student.minYearsAtBelt} yrs at belt`
+                        : ""}
+                      {student.fastTrackReview ? " • Fast Track Review" : ""}
                       {activeRoster === "Eligible"
                         ? ` • ${student.promotionStatus} • Belt size: ${
                             student.belt_size || "Not set"
@@ -903,23 +1102,27 @@ export default function CoachDashboardClient() {
                     </button>
                   </div>
 
-                  <div className="col-center">
-                    <button
-                      onClick={() => toggleSticker(student.id, "behavior")}
-                      className={`ghp-bubble ${session.behavior ? "active-b" : ""}`}
-                    >
-                      B
-                    </button>
-                  </div>
+                  {!student.adult && (
+                    <>
+                      <div className="col-center">
+                        <button
+                          onClick={() => toggleSticker(student.id, "behavior")}
+                          className={`ghp-bubble ${session.behavior ? "active-b" : ""}`}
+                        >
+                          B
+                        </button>
+                      </div>
 
-                  <div className="col-center">
-                    <button
-                      onClick={() => toggleSticker(student.id, "technique")}
-                      className={`ghp-bubble ${session.technique ? "active-t" : ""}`}
-                    >
-                      T
-                    </button>
-                  </div>
+                      <div className="col-center">
+                        <button
+                          onClick={() => toggleSticker(student.id, "technique")}
+                          className={`ghp-bubble ${session.technique ? "active-t" : ""}`}
+                        >
+                          T
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   <div className="col-view">
                     <button
@@ -974,14 +1177,24 @@ export default function CoachDashboardClient() {
               <>
                 <div className="ghp-dash-card-header">
                   <h2>Student Profile</h2>
-                  <p>Edit roster, birthday, belt size, notes, and promotion status.</p>
+                  <p>
+                    Edit roster, birthday, belt size, notes, and promotion status.
+                  </p>
                 </div>
 
                 <div className="ghp-profile-shell">
                   <BeltIcon
                     belt={selectedStudent.belt}
                     stripes={selectedStudent.stripes}
+                    max={selectedStudent.stripeMax}
                   />
+
+                  {selectedStudent.fastTrackReview ? (
+                    <div className="ghp-fast-track">
+                      Fast Track Review: this adult is training at a high frequency.
+                      Review closely for possible early stripe promotion.
+                    </div>
+                  ) : null}
 
                   <label className="ghp-field">
                     <span>Full Name</span>
@@ -1005,11 +1218,13 @@ export default function CoachDashboardClient() {
                           })
                         }
                       >
-                        {BELTS.map((belt) => (
-                          <option key={belt} value={belt}>
-                            {belt}
-                          </option>
-                        ))}
+                        {(selectedStudent.adult ? ADULT_BELTS : KIDS_BELTS).map(
+                          (belt) => (
+                            <option key={belt} value={belt}>
+                              {belt}
+                            </option>
+                          )
+                        )}
                       </select>
                     </label>
 
@@ -1018,16 +1233,32 @@ export default function CoachDashboardClient() {
                       <input
                         type="number"
                         min="0"
-                        max="12"
+                        max={selectedStudent.stripeMax}
                         value={selectedStudent.stripes}
                         onChange={(e) =>
                           updateStudent(selectedStudent.id, {
-                            stripes: Math.min(Number(e.target.value), 12),
+                            stripes: Math.min(
+                              Number(e.target.value),
+                              selectedStudent.stripeMax
+                            ),
                           })
                         }
                       />
                     </label>
                   </div>
+
+                  <label className="ghp-field">
+                    <span>Belt Awarded Date</span>
+                    <input
+                      type="date"
+                      value={selectedStudent.belt_awarded_at || ""}
+                      onChange={(e) =>
+                        updateStudent(selectedStudent.id, {
+                          belt_awarded_at: e.target.value || null,
+                        })
+                      }
+                    />
+                  </label>
 
                   <label className="ghp-field">
                     <span>Belt Size</span>
@@ -1135,6 +1366,9 @@ export default function CoachDashboardClient() {
                       onChange={(e) =>
                         updateStudent(selectedStudent.id, {
                           roster: e.target.value,
+                          belt: e.target.value === "Adults" ? "White" : "White",
+                          stripes: 0,
+                          belt_awarded_at: today(),
                         })
                       }
                     >
@@ -1167,19 +1401,36 @@ export default function CoachDashboardClient() {
                       <span>Attendance Count</span>
                       <strong>{selectedStudent.attendance}</strong>
                     </div>
-                    <div className="ghp-stat">
-                      <span>A / B / T</span>
-                      <strong>
-                        {selectedStudent.attendance} / {selectedStudent.behavior} /{" "}
-                        {selectedStudent.technique}
-                      </strong>
-                    </div>
-                    <div className="ghp-stat">
-                      <span>Monthly Progress</span>
-                      <strong>
-                        {selectedStudent.total} / {selectedStudent.goal || 0}
-                      </strong>
-                    </div>
+                    {selectedStudent.adult ? (
+                      <>
+                        <div className="ghp-stat">
+                          <span>Years at Belt</span>
+                          <strong>
+                            {selectedStudent.yearsAtBelt}/{selectedStudent.minYearsAtBelt}
+                          </strong>
+                        </div>
+                        <div className="ghp-stat">
+                          <span>Total Skill Level</span>
+                          <strong>{selectedStudent.skillAverage.toFixed(1)}/10</strong>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="ghp-stat">
+                          <span>A / B / T</span>
+                          <strong>
+                            {selectedStudent.attendance} / {selectedStudent.behavior} /{" "}
+                            {selectedStudent.technique}
+                          </strong>
+                        </div>
+                        <div className="ghp-stat">
+                          <span>Monthly Progress</span>
+                          <strong>
+                            {selectedStudent.total} / {selectedStudent.goal || 0}
+                          </strong>
+                        </div>
+                      </>
+                    )}
                     <div className="ghp-stat">
                       <span>Eligibility</span>
                       <strong className={selectedStudent.eligible ? "ghp-green" : "ghp-gold"}>
@@ -1202,45 +1453,92 @@ export default function CoachDashboardClient() {
                       </div>
                     </div>
 
-                    <div className="ghp-parent-progress-row">
-                      <div className="ghp-parent-progress-label">
-                        <span>Monthly Goal Progress</span>
-                        <strong>{Math.round(selectedStudent.totalProgress)}%</strong>
-                      </div>
-                      <div className="ghp-progress">
-                        <div
-                          className="ghp-progress-fill"
-                          style={{ width: `${selectedStudent.totalProgress}%` }}
-                        />
-                      </div>
-                    </div>
+                    {!selectedStudent.adult ? (
+                      <>
+                        <div className="ghp-parent-progress-row">
+                          <div className="ghp-parent-progress-label">
+                            <span>Monthly Goal Progress</span>
+                            <strong>{Math.round(selectedStudent.totalProgress)}%</strong>
+                          </div>
+                          <div className="ghp-progress">
+                            <div
+                              className="ghp-progress-fill"
+                              style={{ width: `${selectedStudent.totalProgress}%` }}
+                            />
+                          </div>
+                        </div>
 
-                    <div className="ghp-parent-progress-row">
-                      <div className="ghp-parent-progress-label">
-                        <span>Behavior Progress</span>
-                        <strong>{Math.round(selectedStudent.behaviorProgress)}%</strong>
-                      </div>
-                      <div className="ghp-progress">
-                        <div
-                          className="ghp-progress-fill"
-                          style={{ width: `${selectedStudent.behaviorProgress}%` }}
-                        />
-                      </div>
-                    </div>
+                        <div className="ghp-parent-progress-row">
+                          <div className="ghp-parent-progress-label">
+                            <span>Behavior Progress</span>
+                            <strong>{Math.round(selectedStudent.behaviorProgress)}%</strong>
+                          </div>
+                          <div className="ghp-progress">
+                            <div
+                              className="ghp-progress-fill"
+                              style={{ width: `${selectedStudent.behaviorProgress}%` }}
+                            />
+                          </div>
+                        </div>
 
-                    <div className="ghp-parent-progress-row">
-                      <div className="ghp-parent-progress-label">
-                        <span>Technique Progress</span>
-                        <strong>{Math.round(selectedStudent.techniqueProgress)}%</strong>
-                      </div>
-                      <div className="ghp-progress">
-                        <div
-                          className="ghp-progress-fill"
-                          style={{ width: `${selectedStudent.techniqueProgress}%` }}
-                        />
-                      </div>
-                    </div>
+                        <div className="ghp-parent-progress-row">
+                          <div className="ghp-parent-progress-label">
+                            <span>Technique Progress</span>
+                            <strong>{Math.round(selectedStudent.techniqueProgress)}%</strong>
+                          </div>
+                          <div className="ghp-progress">
+                            <div
+                              className="ghp-progress-fill"
+                              style={{ width: `${selectedStudent.techniqueProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
+
+                  {selectedStudent.adult ? (
+                    <div className="ghp-adult-skills">
+                      <div className="ghp-dash-card-header">
+                        <h2>Adult Skill Evaluation</h2>
+                        <p>Rate each area manually from 0 to 10.</p>
+                      </div>
+
+                      {ADULT_SKILL_CATEGORIES.map((category) => {
+                        const value = Number(
+                          selectedStudent.adult_skill_ratings?.[category] || 0
+                        );
+
+                        return (
+                          <div key={category} className="ghp-skill-row">
+                            <div className="ghp-skill-top">
+                              <span>{category}</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={value}
+                                onChange={(e) =>
+                                  updateAdultSkill(
+                                    selectedStudent,
+                                    category,
+                                    Number(e.target.value)
+                                  )
+                                }
+                              />
+                            </div>
+
+                            <div className="ghp-progress">
+                              <div
+                                className="ghp-progress-fill"
+                                style={{ width: `${value * 10}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
 
                   <label className="ghp-field">
                     <span>Coach Notes</span>
