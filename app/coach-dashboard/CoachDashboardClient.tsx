@@ -700,10 +700,7 @@ export default function CoachDashboardClient() {
         yearsAtBelt >= minYearsAtBelt;
 
       const eligible = adult
-        ? attendance >= MIN_ATTENDANCE ||
-          fastTrackReview ||
-          adultNextBeltEligible ||
-          blackDegreeEligible
+        ? fastTrackReview || adultNextBeltEligible || blackDegreeEligible
         : attendance >= MIN_ATTENDANCE &&
           total >= goal &&
           behavior >= behaviorGoal &&
@@ -793,7 +790,7 @@ export default function CoachDashboardClient() {
     });
 
   const selectedStudent =
-    visibleSummaries.find((s) => s.id === selectedStudentId) || null;
+    summaries.find((s) => s.id === selectedStudentId) || null;
 
   async function saveMonthlySettings(month: string, classes: number) {
     const { error } = await supabase
@@ -1229,7 +1226,7 @@ export default function CoachDashboardClient() {
                   key={student.id}
                   style={
                     isEligibleTab
-                      ? { gridTemplateColumns: "minmax(180px, 1fr) 220px" }
+                      ? { gridTemplateColumns: "minmax(180px, 1fr) 360px" }
                       : undefined
                   }
                 >
@@ -1252,7 +1249,21 @@ export default function CoachDashboardClient() {
                   </div>
 
                   {isEligibleTab ? (
-                    <div className="col-view">
+                    <div
+                      className="col-view"
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: "10px",
+                      }}
+                    >
+                      <button
+                        onClick={() => setSelectedStudentId(student.id)}
+                        className="ghp-btn ghp-btn-ghost ghp-btn-small"
+                      >
+                        View
+                      </button>
+
                       {student.blackBelt ? (
                         <button
                           onClick={() => awardBlackBeltDegree(student.id)}
