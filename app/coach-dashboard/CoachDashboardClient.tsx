@@ -26,6 +26,7 @@ type Student = {
   notes: string;
   birthday?: string | null;
   roster?: string | null;
+  belt_size?: string | null;
 };
 
 type Session = {
@@ -53,7 +54,8 @@ const BELTS: Belt[] = [
   "Green/Black",
 ];
 
-const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults"];
+const DEFAULT_ROSTERS = ["Eligible", "Wildlings", "Hunters", "Adults"];
+const REAL_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
 const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
   2: 1.0,
@@ -71,8 +73,8 @@ function monthKey(dateString: string): string {
   return dateString.slice(0, 7);
 }
 
-function getStripeMax(belt: Belt): number {
-  return belt === "White" ? 12 : 8;
+function getStripeMax() {
+  return 12;
 }
 
 function tierFromAttendance(
@@ -104,11 +106,8 @@ function getCurrentStreak(sessions: Session[]) {
     const diffMs = prev.getTime() - curr.getTime();
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 7) {
-      streak += 1;
-    } else {
-      break;
-    }
+    if (diffDays <= 7) streak += 1;
+    else break;
   }
 
   return streak;
@@ -121,39 +120,26 @@ function getAge(birthday?: string | null) {
   if (Number.isNaN(birth.getTime())) return null;
 
   const now = new Date();
-
   let age = now.getFullYear() - birth.getFullYear();
   const m = now.getMonth() - birth.getMonth();
 
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
-    age--;
-  }
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
 
   return age;
 }
 
 function getBirthdayParts(birthday?: string | null) {
-  if (!birthday) {
-    return { month: "", day: "", year: "" };
-  }
+  if (!birthday) return { month: "", day: "", year: "" };
 
   const [year, month, day] = birthday.split("-");
-
-  return {
-    month: month || "",
-    day: day || "",
-    year: year || "",
-  };
+  return { month: month || "", day: day || "", year: year || "" };
 }
 
 function padBirthdayPart(value: string | number) {
   return String(value).padStart(2, "0");
 }
 
-function getBirthdayThisMonth(
-  birthday?: string | null,
-  selectedDate?: string
-) {
+function getBirthdayThisMonth(birthday?: string | null, selectedDate?: string) {
   if (!birthday || !selectedDate) return false;
 
   const [, month] = birthday.split("-");
@@ -162,10 +148,7 @@ function getBirthdayThisMonth(
   return month === selectedMonth;
 }
 
-function getUpcomingAge(
-  birthday?: string | null,
-  selectedDate?: string
-) {
+function getUpcomingAge(birthday?: string | null, selectedDate?: string) {
   if (!birthday || !selectedDate) return null;
 
   const birth = new Date(birthday);
@@ -179,6 +162,63 @@ function formatBirthdayMD(birthday?: string | null) {
   if (!birthday) return "";
   const [, month, day] = birthday.split("-");
   return `${month}-${day}`;
+}
+
+function getPromotionStatus(stripes: number) {
+  return stripes >= 12 ? "Ready for next belt" : "Ready for stripe";
+}
+
+function getBeltClass(belt: Belt) {
+  if (belt.includes("Gray")) return "ghp-belt-gray";
+  if (belt.includes("Yellow")) return "ghp-belt-yellow";
+  if (belt.includes("Orange")) return "ghp-belt-orange";
+  if (belt.includes("Green")) return "ghp-belt-green";
+  return "ghp-belt-white";
+}
+
+function StripeDisplay({ stripes }: { stripes: number }) {
+  const total = 12;
+
+  return (
+    <div className="ghp-stripes">
+      {Array.from({ length: total }, (_, i) => {
+        const stripeNumber = i + 1;
+        const isEarned = stripeNumber <= stripes;
+        let colorClass = "ghp-stripe-white";
+
+        if (stripeNumber >= 5 && stripeNumber <= 8) {
+          colorClass = "ghp-stripe-yellow";
+        }
+
+        if (stripeNumber >= 9) {
+          colorClass = "ghp-stripe-red";
+        }
+
+        return (
+          <span
+            key={stripeNumber}
+            className={`ghp-stripe ${isEarned ? colorClass : "ghp-stripe-empty"}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function BeltIcon({ belt, stripes }: { belt: Belt; stripes: number }) {
+  return (
+    <div className="ghp-belt-card">
+      <div className={`ghp-belt-icon ${getBeltClass(belt)}`}>
+        <div className="ghp-belt-bar" />
+      </div>
+
+      <div>
+        <div className="ghp-belt-title">{belt}</div>
+        <div className="ghp-belt-subtitle">{stripes}/12 stripes</div>
+        <StripeDisplay stripes={stripes} />
+      </div>
+    </div>
+  );
 }
 
 export default function CoachDashboardClient() {
@@ -257,14 +297,16 @@ export default function CoachDashboardClient() {
         notes: latestNote?.content || "",
         birthday: student.birthday || null,
         roster: student.roster || "Wildlings",
+        belt_size: student.belt_size || "",
       };
     });
 
     const allRosterNames = Array.from(
       new Set(studentList.map((s) => (s.roster || "").trim()).filter(Boolean))
     );
+
     const nonDefaultRosters = allRosterNames.filter(
-      (r) => !DEFAULT_ROSTERS.includes(r)
+      (r) => !REAL_ROSTERS.includes(r) && r !== "Eligible"
     );
 
     setCustomRosters(nonDefaultRosters);
@@ -297,9 +339,7 @@ export default function CoachDashboardClient() {
         .eq("month", month)
         .maybeSingle();
 
-      if (!error) {
-        setAvailableClasses(data?.available_classes ?? 16);
-      }
+      if (!error) setAvailableClasses(data?.available_classes ?? 16);
     }
 
     loadMonthlySettings();
@@ -310,6 +350,8 @@ export default function CoachDashboardClient() {
   }, [customRosters]);
 
   const rosterStudents = useMemo(() => {
+    if (activeRoster === "Eligible") return students;
+
     return students.filter((s) => (s.roster || "Wildlings") === activeRoster);
   }, [students, activeRoster]);
 
@@ -321,6 +363,19 @@ export default function CoachDashboardClient() {
       setSelectedStudentId(null);
     }
   }, [rosterStudents, selectedStudentId]);
+
+  function getCareerStickerTotal(studentId: string): number {
+    const studentSessions = sessions.filter((s) => s.student_id === studentId);
+    let total = 0;
+
+    for (const session of studentSessions) {
+      if (session.attendance) total += 1;
+      if (session.behavior) total += 1;
+      if (session.technique) total += 1;
+    }
+
+    return total;
+  }
 
   const summaries = useMemo(() => {
     return students.map((student) => {
@@ -337,6 +392,7 @@ export default function CoachDashboardClient() {
 
       const tier = tierFromAttendance(attendance, availableClasses);
       const goal = Math.ceil(attendance * 3 * TIER_PERCENTAGES[tier]);
+
       const behaviorGoal = Math.ceil(attendance * 0.8);
       const techniqueGoal = Math.ceil(attendance * 0.8);
 
@@ -354,10 +410,11 @@ export default function CoachDashboardClient() {
       const totalProgress =
         goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
 
-      const baselineSkillGoal = Math.ceil(MIN_ATTENDANCE * 0.75);
+      const behaviorProgress =
+        behaviorGoal > 0 ? Math.min((behavior / behaviorGoal) * 100, 100) : 0;
 
-      const behaviorProgress = Math.min((behavior / baselineSkillGoal) * 100, 100);
-      const techniqueProgress = Math.min((technique / baselineSkillGoal) * 100, 100);
+      const techniqueProgress =
+        techniqueGoal > 0 ? Math.min((technique / techniqueGoal) * 100, 100) : 0;
 
       return {
         ...student,
@@ -374,12 +431,16 @@ export default function CoachDashboardClient() {
         behaviorProgress,
         techniqueProgress,
         age: getAge(student.birthday),
+        promotionStatus: getPromotionStatus(student.stripes || 0),
       };
     });
   }, [students, sessions, selectedDate, availableClasses]);
 
   const visibleSummaries = summaries
-    .filter((s) => (s.roster || "Wildlings") === activeRoster)
+    .filter((s) => {
+      if (activeRoster === "Eligible") return s.eligible;
+      return (s.roster || "Wildlings") === activeRoster;
+    })
     .sort((a, b) => {
       const beltA = BELTS.indexOf(a.belt);
       const beltB = BELTS.indexOf(b.belt);
@@ -458,6 +519,7 @@ export default function CoachDashboardClient() {
     setMessage("Adding student...");
 
     const parentEmail = prompt("Enter parent email for this student") || "";
+    const targetRoster = activeRoster === "Eligible" ? "Wildlings" : activeRoster;
 
     const { data, error } = await supabase
       .from("students")
@@ -466,7 +528,8 @@ export default function CoachDashboardClient() {
         belt: newStudentBelt,
         stripes: 0,
         parent_email: parentEmail,
-        roster: activeRoster,
+        roster: targetRoster,
+        belt_size: "",
       })
       .select()
       .single();
@@ -483,7 +546,8 @@ export default function CoachDashboardClient() {
       stripes: data.stripes,
       notes: "",
       birthday: data.birthday || null,
-      roster: data.roster || activeRoster,
+      roster: data.roster || targetRoster,
+      belt_size: data.belt_size || "",
     };
 
     setStudents((prev) => [...prev, newStudent]);
@@ -521,6 +585,7 @@ export default function CoachDashboardClient() {
     if (updates.stripes !== undefined) dbUpdates.stripes = updates.stripes;
     if (updates.birthday !== undefined) dbUpdates.birthday = updates.birthday;
     if (updates.roster !== undefined) dbUpdates.roster = updates.roster;
+    if (updates.belt_size !== undefined) dbUpdates.belt_size = updates.belt_size;
 
     const { error } = await supabase
       .from("students")
@@ -648,19 +713,6 @@ export default function CoachDashboardClient() {
     setSavingNote(false);
   }
 
-  function getCareerStickerTotal(studentId: string): number {
-    const studentSessions = sessions.filter((s) => s.student_id === studentId);
-    let total = 0;
-
-    for (const session of studentSessions) {
-      if (session.attendance) total += 1;
-      if (session.behavior) total += 1;
-      if (session.technique) total += 1;
-    }
-
-    return total;
-  }
-
   async function awardStripe(studentId: string) {
     const student = summaries.find((s) => s.id === studentId);
     if (!student) return;
@@ -671,7 +723,7 @@ export default function CoachDashboardClient() {
     }
 
     await updateStudent(studentId, {
-      stripes: Math.min(student.stripes + 1, getStripeMax(student.belt)),
+      stripes: Math.min(student.stripes + 1, getStripeMax()),
     });
   }
 
@@ -779,7 +831,9 @@ export default function CoachDashboardClient() {
             type="text"
             value={newStudentName}
             onChange={(e) => setNewStudentName(e.target.value)}
-            placeholder={`Add a student to ${activeRoster}`}
+            placeholder={`Add a student to ${
+              activeRoster === "Eligible" ? "Wildlings" : activeRoster
+            }`}
           />
         </label>
 
@@ -806,7 +860,11 @@ export default function CoachDashboardClient() {
         <div className="ghp-dash-card">
           <div className="ghp-dash-card-header">
             <h2>{activeRoster} Roster</h2>
-            <p>Mark attendance, behavior, and technique for the selected class date.</p>
+            <p>
+              {activeRoster === "Eligible"
+                ? "Students who are ready for a stripe or belt promotion."
+                : "Mark attendance, behavior, and technique for the selected class date."}
+            </p>
           </div>
 
           <div className="ghp-sheet">
@@ -826,8 +884,13 @@ export default function CoachDashboardClient() {
                   <div className="col-name">
                     <div className="ghp-sheet-student">{student.name}</div>
                     <div className="ghp-sheet-meta">
-                      {student.belt} • {student.stripes}/{getStripeMax(student.belt)}
+                      {student.belt} • {student.stripes}/12 stripes
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
+                      {activeRoster === "Eligible"
+                        ? ` • ${student.promotionStatus} • Belt size: ${
+                            student.belt_size || "Not set"
+                          }`
+                        : ""}
                     </div>
                   </div>
 
@@ -890,7 +953,8 @@ export default function CoachDashboardClient() {
                     <div>
                       <div className="ghp-sheet-student">{student.name}</div>
                       <div className="ghp-sheet-meta">
-                        {(student.roster || "Wildlings")} • {formatBirthdayMD(student.birthday)}
+                        {student.roster || "Wildlings"} •{" "}
+                        {formatBirthdayMD(student.birthday)}
                       </div>
                     </div>
 
@@ -910,10 +974,15 @@ export default function CoachDashboardClient() {
               <>
                 <div className="ghp-dash-card-header">
                   <h2>Student Profile</h2>
-                  <p>Edit roster, birthday, notes, and promotion status.</p>
+                  <p>Edit roster, birthday, belt size, notes, and promotion status.</p>
                 </div>
 
                 <div className="ghp-profile-shell">
+                  <BeltIcon
+                    belt={selectedStudent.belt}
+                    stripes={selectedStudent.stripes}
+                  />
+
                   <label className="ghp-field">
                     <span>Full Name</span>
                     <input
@@ -949,19 +1018,30 @@ export default function CoachDashboardClient() {
                       <input
                         type="number"
                         min="0"
-                        max={getStripeMax(selectedStudent.belt)}
+                        max="12"
                         value={selectedStudent.stripes}
                         onChange={(e) =>
                           updateStudent(selectedStudent.id, {
-                            stripes: Math.min(
-                              Number(e.target.value),
-                              getStripeMax(selectedStudent.belt)
-                            ),
+                            stripes: Math.min(Number(e.target.value), 12),
                           })
                         }
                       />
                     </label>
                   </div>
+
+                  <label className="ghp-field">
+                    <span>Belt Size</span>
+                    <input
+                      type="text"
+                      placeholder="M0, M1, M2, A0, A1..."
+                      value={selectedStudent.belt_size || ""}
+                      onChange={(e) =>
+                        updateStudent(selectedStudent.id, {
+                          belt_size: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
 
                   <label className="ghp-field">
                     <span>Birthday</span>
@@ -972,14 +1052,12 @@ export default function CoachDashboardClient() {
                         onChange={async (e) => {
                           const value = e.target.value;
                           setBirthdayMonth(value);
-                          if (selectedStudent) {
-                            await saveBirthdayFromParts(
-                              selectedStudent.id,
-                              value,
-                              birthdayDay,
-                              birthdayYear
-                            );
-                          }
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            value,
+                            birthdayDay,
+                            birthdayYear
+                          );
                         }}
                       >
                         <option value="">Month</option>
@@ -1008,14 +1086,12 @@ export default function CoachDashboardClient() {
                         onChange={async (e) => {
                           const value = e.target.value;
                           setBirthdayDay(value);
-                          if (selectedStudent) {
-                            await saveBirthdayFromParts(
-                              selectedStudent.id,
-                              birthdayMonth,
-                              value,
-                              birthdayYear
-                            );
-                          }
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            birthdayMonth,
+                            value,
+                            birthdayYear
+                          );
                         }}
                       >
                         <option value="">Day</option>
@@ -1034,14 +1110,12 @@ export default function CoachDashboardClient() {
                         onChange={async (e) => {
                           const value = e.target.value;
                           setBirthdayYear(value);
-                          if (selectedStudent) {
-                            await saveBirthdayFromParts(
-                              selectedStudent.id,
-                              birthdayMonth,
-                              birthdayDay,
-                              value
-                            );
-                          }
+                          await saveBirthdayFromParts(
+                            selectedStudent.id,
+                            birthdayMonth,
+                            birthdayDay,
+                            value
+                          );
                         }}
                       >
                         <option value="">Year</option>
@@ -1064,7 +1138,7 @@ export default function CoachDashboardClient() {
                         })
                       }
                     >
-                      {allRosters.map((roster) => (
+                      {[...REAL_ROSTERS, ...customRosters].map((roster) => (
                         <option key={roster} value={roster}>
                           {roster}
                         </option>
@@ -1073,6 +1147,14 @@ export default function CoachDashboardClient() {
                   </label>
 
                   <div className="ghp-stat-grid">
+                    <div className="ghp-stat">
+                      <span>Promotion</span>
+                      <strong>{selectedStudent.promotionStatus}</strong>
+                    </div>
+                    <div className="ghp-stat">
+                      <span>Belt Size</span>
+                      <strong>{selectedStudent.belt_size || "—"}</strong>
+                    </div>
                     <div className="ghp-stat">
                       <span>Age</span>
                       <strong>{selectedStudent.age ?? "—"}</strong>
@@ -1088,7 +1170,8 @@ export default function CoachDashboardClient() {
                     <div className="ghp-stat">
                       <span>A / B / T</span>
                       <strong>
-                        {selectedStudent.attendance} / {selectedStudent.behavior} / {selectedStudent.technique}
+                        {selectedStudent.attendance} / {selectedStudent.behavior} /{" "}
+                        {selectedStudent.technique}
                       </strong>
                     </div>
                     <div className="ghp-stat">
@@ -1102,14 +1185,6 @@ export default function CoachDashboardClient() {
                       <strong className={selectedStudent.eligible ? "ghp-green" : "ghp-gold"}>
                         {selectedStudent.eligible ? "Eligible" : "Not Yet"}
                       </strong>
-                    </div>
-                    <div className="ghp-stat">
-                      <span>Current Streak</span>
-                      <strong>{selectedStudent.streak}</strong>
-                    </div>
-                    <div className="ghp-stat">
-                      <span>Career Stickers</span>
-                      <strong>{selectedStudent.careerStickers}</strong>
                     </div>
                   </div>
 

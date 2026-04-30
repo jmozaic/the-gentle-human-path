@@ -1632,3 +1632,124 @@ h3,
   text-transform: uppercase;
   color: #9a741f;
 }
+.ghp-belt-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #eee6d8;
+  border-radius: 18px;
+  background: #fffaf1;
+}
+
+.ghp-belt-icon {
+  width: 84px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(17, 17, 17, 0.18);
+  position: relative;
+  overflow: hidden;
+}
+
+.ghp-belt-bar {
+  position: absolute;
+  right: 10px;
+  top: 0;
+  width: 18px;
+  height: 100%;
+  background: #111;
+}
+
+.ghp-belt-white {
+  background: #f8f8f8;
+}
+
+.ghp-belt-gray {
+  background: #9ca3af;
+}
+
+.ghp-belt-yellow {
+  background: #facc15;
+}
+
+.ghp-belt-orange {
+  background: #fb923c;
+}
+
+.ghp-belt-green {
+  background: #22c55e;
+}
+
+.ghp-belt-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111;
+}
+
+.ghp-belt-subtitle {
+  font-size: 12px;
+  color: #6e675d;
+  margin-top: 2px;
+}
+
+.ghp-stripes {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.ghp-stripe {
+  width: 14px;
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 17, 17, 0.18);
+}
+
+.ghp-stripe-white {
+  background: #ffffff;
+}
+
+.ghp-stripe-yellow {
+  background: #facc15;
+}
+
+.ghp-stripe-red {
+  background: #ef4444;
+}
+
+.ghp-stripe-empty {
+  background: transparent;
+  opacity: 0.25;
+}
+
+.ghp-birthday-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 10px;
+}
+
+.ghp-birthday-list {
+  display: grid;
+  gap: 12px;
+}
+
+.ghp-birthday-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3eee6;
+}
+
+.ghp-birthday-row:last-child {
+  border-bottom: 0;
+}
+
+.ghp-birthday-age {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a741f;
+}
