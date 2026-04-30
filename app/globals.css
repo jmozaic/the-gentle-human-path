@@ -1809,3 +1809,59 @@ h3,
 .ghp-skill-top input {
   width: 70px;
 }
+.ghp-belt-blue {
+  background: #2563eb;
+}
+
+.ghp-belt-purple {
+  background: #7c3aed;
+}
+
+.ghp-belt-brown {
+  background: #92400e;
+}
+
+.ghp-belt-black {
+  background: #111111;
+}
+
+.ghp-fast-track {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(211, 176, 109, 0.45);
+  background: rgba(211, 176, 109, 0.14);
+  color: #7a5a18;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ghp-adult-skills {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid #eee6d8;
+  background: #fffaf1;
+}
+
+.ghp-skill-row {
+  display: grid;
+  gap: 8px;
+}
+
+.ghp-skill-top {
+  display: grid;
+  grid-template-columns: 1fr 70px;
+  gap: 10px;
+  align-items: center;
+}
+
+.ghp-skill-top span {
+  font-size: 13px;
+  color: #111111;
+  font-weight: 600;
+}
+
+.ghp-skill-top input {
+  width: 70px;
+}
