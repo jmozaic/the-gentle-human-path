@@ -14,18 +14,18 @@ export default function Home() {
             and growth.
           </h1>
           <p className="ghp-lead">
-            The Gentle Human Path brings together student progress, parent
+            The Gentle Human Path brings together student progress, member
             connection, coach notes, and daily class tracking into one modern
             academy system.
           </p>
 
           <div className="ghp-actions">
-            <Link href="/parent-signup" className="ghp-btn ghp-btn-gold">
-              Parent Signup
+            <Link href="/member-signup" className="ghp-btn ghp-btn-gold">
+              Member Signup
             </Link>
 
-            <Link href="/parent-login" className="ghp-btn ghp-btn-secondary">
-              Parent Login
+            <Link href="/member-login" className="ghp-btn ghp-btn-secondary">
+              Member Login
             </Link>
 
             <Link href="/coach-login" className="ghp-btn ghp-btn-secondary">
@@ -45,7 +45,7 @@ export default function Home() {
           </div>
 
           <div className="ghp-panel-card">
-            <p className="ghp-panel-label">Parents</p>
+            <p className="ghp-panel-label">Members</p>
             <h3>Stay connected.</h3>
             <p>
               Give families a clearer view of progress, behavior, technique, and
@@ -62,7 +62,7 @@ export default function Home() {
         </div>
 
         <div className="ghp-feature">
-          <span className="ghp-feature-label">Parent Portal</span>
+          <span className="ghp-feature-label">Member Portal</span>
           <p>Simple access to student progress, updates, and communication.</p>
         </div>
 
@@ -96,7 +96,7 @@ export default function Home() {
           </div>
 
           <div className="ghp-editorial-card">
-            <h3>Parent-ready structure</h3>
+            <h3>Member-ready structure</h3>
             <p>
               Create a cleaner bridge between the academy and the family without
               losing your coaching workflow.

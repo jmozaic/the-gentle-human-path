@@ -1224,9 +1224,6 @@ export default function CoachDashboardClient() {
                         ? ` • ${student.blackDegree} degree`
                         : ` • ${student.stripes}/${student.stripeMax} stripes`}
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
-                      {student.adult
-                        ? ` • training ${student.trainingYears} yrs • belt ${student.yearsAtBelt}/${student.minYearsAtBelt} yrs`
-                        : ""}
                       {student.fastTrackReview
                         ? ` • Fast Track ${student.fastTrackAverage.toFixed(1)}x/wk`
                         : ""}
