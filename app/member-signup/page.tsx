@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-export default function ParentSignupPage() {
+export default function MemberSignupPage() {
   const supabase = createClient();
 
   const [firstName, setFirstName] = useState("");
@@ -25,9 +25,9 @@ export default function ParentSignupPage() {
       password,
       options: {
         emailRedirectTo:
-          "https://the-gentle-human-path-7a6i.vercel.app/parent-portal",
+          "https://the-gentle-human-path-7a6i.vercel.app/member-portal",
         data: {
-          role: "parent",
+          role: "member",
           first_name: firstName,
           last_name: lastName,
           phone,
@@ -50,16 +50,15 @@ export default function ParentSignupPage() {
     <main className="ghp-auth-page">
       <section className="ghp-auth-shell">
         <div className="ghp-auth-copy">
-          <p className="ghp-kicker">Parent Signup</p>
+          <p className="ghp-kicker">Member Signup</p>
           <h1>Create your place on The Gentle Human Path.</h1>
           <p>
-            Sign up to follow your child’s progress, receive coach updates, and
-            stay connected to the academy.
+            Sign up to follow student progress, coach notes, and academy updates.
           </p>
         </div>
 
         <div className="ghp-auth-card">
-          <div className="ghp-auth-card-title">Create Parent Account</div>
+          <div className="ghp-auth-card-title">Create Member Account</div>
 
           <form className="ghp-auth-grid" onSubmit={handleSignup}>
             <label className="ghp-field">
@@ -127,7 +126,7 @@ export default function ParentSignupPage() {
             </div>
           </form>
 
-          {message && <p style={{ marginTop: 16 }}>{message}</p>}
+          {message ? <p style={{ marginTop: 16 }}>{message}</p> : null}
         </div>
       </section>
     </main>

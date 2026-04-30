@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-export default function ParentLoginPage() {
+export default function MemberLoginPage() {
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
@@ -27,23 +27,23 @@ export default function ParentLoginPage() {
       return;
     }
 
-    window.location.href = "/parent-portal";
+    window.location.href = "/member-portal";
   }
 
   return (
     <main className="ghp-auth-page">
       <section className="ghp-auth-shell">
         <div className="ghp-auth-copy">
-          <p className="ghp-kicker">Parent Login</p>
-          <h1>Enter the parent portal.</h1>
+          <p className="ghp-kicker">Member Login</p>
+          <h1>Enter the member portal.</h1>
           <p>
-            Log in to view your child’s progress, notes, and current standing on
-            The Gentle Human Path.
+            Log in to view student progress, attendance, coach notes, and current
+            standing on The Gentle Human Path.
           </p>
         </div>
 
         <div className="ghp-auth-card">
-          <div className="ghp-auth-card-title">Parent Login</div>
+          <div className="ghp-auth-card-title">Member Login</div>
 
           <form className="ghp-auth-grid" onSubmit={handleLogin}>
             <label className="ghp-field ghp-field-wide">
