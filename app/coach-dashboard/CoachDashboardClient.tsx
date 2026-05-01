@@ -492,7 +492,8 @@ export default function CoachDashboardClient() {
   const [students, setStudents] = useState<Student[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(today());
-  const [availableClasses, setAvailableClasses] = useState<number>(16);
+  const [kidsAvailableClasses, setKidsAvailableClasses] = useState<number>(16);
+  const [adultsAvailableClasses, setAdultsAvailableClasses] = useState<number>(16);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentBelt, setNewStudentBelt] = useState<Belt>("White");
@@ -578,7 +579,18 @@ export default function CoachDashboardClient() {
     setCustomRosters(nonDefaultRosters);
     setStudents(studentList);
     setSessions(sessionsData as Session[]);
-    setAvailableClasses(monthlySettingsData?.available_classes ?? 16);
+
+    setKidsAvailableClasses(
+      monthlySettingsData?.kids_available_classes ??
+        monthlySettingsData?.available_classes ??
+        16
+    );
+
+    setAdultsAvailableClasses(
+      monthlySettingsData?.adults_available_classes ??
+        monthlySettingsData?.available_classes ??
+        16
+    );
 
     if (studentList.length > 0 && !selectedStudentId) {
       const firstInRoster = studentList.find(
@@ -605,7 +617,10 @@ export default function CoachDashboardClient() {
         .eq("month", month)
         .maybeSingle();
 
-      if (!error) setAvailableClasses(data?.available_classes ?? 16);
+      if (!error) {
+        setKidsAvailableClasses(data?.kids_available_classes ?? data?.available_classes ?? 16);
+        setAdultsAvailableClasses(data?.adults_available_classes ?? data?.available_classes ?? 16);
+      }
     }
 
     loadMonthlySettings();
@@ -662,9 +677,30 @@ export default function CoachDashboardClient() {
     return count / 13;
   }
 
+  async function saveMonthlySettings(
+    month: string,
+    kidsClasses: number,
+    adultClasses: number
+  ) {
+    const { error } = await supabase
+      .from("monthly_settings")
+      .upsert(
+        {
+          month,
+          available_classes: kidsClasses,
+          kids_available_classes: kidsClasses,
+          adults_available_classes: adultClasses,
+        },
+        { onConflict: "month" }
+      );
+
+    if (error) setMessage(error.message);
+  }
+
   const summaries = useMemo(() => {
     return students.map((student) => {
       const adult = isAdultStudent(student);
+      const availableClasses = adult ? adultsAvailableClasses : kidsAvailableClasses;
       const blackBelt = adult && student.belt === "Black";
       const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
 
@@ -739,6 +775,7 @@ export default function CoachDashboardClient() {
         ...student,
         adult,
         blackBelt,
+        availableClasses,
         attendance,
         behavior,
         technique,
@@ -767,7 +804,13 @@ export default function CoachDashboardClient() {
         blackDegreeEligible,
       };
     });
-  }, [students, sessions, selectedDate, availableClasses]);
+  }, [
+    students,
+    sessions,
+    selectedDate,
+    kidsAvailableClasses,
+    adultsAvailableClasses,
+  ]);
 
   const visibleSummaries = summaries
     .filter((s) => {
@@ -804,20 +847,6 @@ export default function CoachDashboardClient() {
     });
 
   const selectedStudent = summaries.find((s) => s.id === selectedStudentId) || null;
-
-  async function saveMonthlySettings(month: string, classes: number) {
-    const { error } = await supabase
-      .from("monthly_settings")
-      .upsert(
-        {
-          month,
-          available_classes: classes,
-        },
-        { onConflict: "month" }
-      );
-
-    if (error) setMessage(error.message);
-  }
 
   async function addRoster() {
     const rosterName = prompt("Enter new roster name");
@@ -1172,14 +1201,35 @@ export default function CoachDashboardClient() {
         </label>
 
         <label className="ghp-field">
-          <span>Classes This Month</span>
+          <span>Kids Classes This Month</span>
           <input
             type="number"
-            value={availableClasses}
+            value={kidsAvailableClasses}
             onChange={async (e) => {
               const value = Number(e.target.value);
-              setAvailableClasses(value);
-              await saveMonthlySettings(monthKey(selectedDate), value);
+              setKidsAvailableClasses(value);
+              await saveMonthlySettings(
+                monthKey(selectedDate),
+                value,
+                adultsAvailableClasses
+              );
+            }}
+          />
+        </label>
+
+        <label className="ghp-field">
+          <span>Adult Classes This Month</span>
+          <input
+            type="number"
+            value={adultsAvailableClasses}
+            onChange={async (e) => {
+              const value = Number(e.target.value);
+              setAdultsAvailableClasses(value);
+              await saveMonthlySettings(
+                monthKey(selectedDate),
+                kidsAvailableClasses,
+                value
+              );
             }}
           />
         </label>
@@ -1223,8 +1273,8 @@ export default function CoachDashboardClient() {
               {activeRoster === "Eligible"
                 ? "Students who need stripe, belt, degree, or fast-track review."
                 : activeRoster === "Adults"
-                ? "Adults use attendance only and separate adult criteria."
-                : "Mark attendance, behavior, and technique for the selected class date."}
+                ? "Adults use attendance only and adult monthly class totals."
+                : "Kids use attendance, behavior, technique, and kids monthly class totals."}
             </p>
           </div>
 
@@ -1596,6 +1646,11 @@ export default function CoachDashboardClient() {
                     <div className="ghp-stat">
                       <span>Attendance Count</span>
                       <strong>{selectedStudent.attendance}</strong>
+                    </div>
+
+                    <div className="ghp-stat">
+                      <span>Monthly Class Count</span>
+                      <strong>{selectedStudent.availableClasses}</strong>
                     </div>
 
                     {selectedStudent.adult ? (
