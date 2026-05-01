@@ -36,6 +36,8 @@ type Student = {
   last_stripe_awarded_at?: string | null;
   black_belt_degree?: number | null;
   adult_skill_ratings?: Record<string, number> | null;
+  kids_training_started_at?: string | null;
+  kids_last_belt_promotion_at?: string | null;
 };
 
 type Session = {
@@ -565,6 +567,8 @@ export default function CoachDashboardClient() {
         last_stripe_awarded_at: student.last_stripe_awarded_at || null,
         black_belt_degree: student.black_belt_degree || 0,
         adult_skill_ratings: student.adult_skill_ratings || {},
+        kids_training_started_at: student.kids_training_started_at || null,
+        kids_last_belt_promotion_at: student.kids_last_belt_promotion_at || null,
       };
     });
 
@@ -732,6 +736,11 @@ export default function CoachDashboardClient() {
       const trainingYears = getYearsSince(student.training_started_at);
       const yearsSinceLastStripe = getYearsSince(student.last_stripe_awarded_at);
 
+      const kidsTrainingYears = getYearsSince(student.kids_training_started_at);
+      const kidsMonthsSinceLastPromotion = getMonthsSince(
+        student.kids_last_belt_promotion_at
+      );
+
       const blackDegree = Number(student.black_belt_degree || 0);
       const blackDegreeRequiredYears = blackBelt
         ? getBlackBeltNextDegreeYears(blackDegree)
@@ -798,6 +807,8 @@ export default function CoachDashboardClient() {
         requiredMonthsAtBelt,
         trainingYears,
         yearsSinceLastStripe,
+        kidsTrainingYears,
+        kidsMonthsSinceLastPromotion,
         skillAverage,
         blackDegree,
         blackDegreeRequiredYears,
@@ -886,6 +897,8 @@ export default function CoachDashboardClient() {
         last_stripe_awarded_at: null,
         black_belt_degree: 0,
         adult_skill_ratings: adult ? {} : {},
+        kids_training_started_at: adult ? null : today(),
+        kids_last_belt_promotion_at: adult ? null : today(),
       })
       .select()
       .single();
@@ -909,6 +922,8 @@ export default function CoachDashboardClient() {
       last_stripe_awarded_at: data.last_stripe_awarded_at || null,
       black_belt_degree: data.black_belt_degree || 0,
       adult_skill_ratings: data.adult_skill_ratings || {},
+      kids_training_started_at: data.kids_training_started_at || null,
+      kids_last_belt_promotion_at: data.kids_last_belt_promotion_at || null,
     };
 
     setStudents((prev) => [...prev, newStudent]);
@@ -952,6 +967,8 @@ export default function CoachDashboardClient() {
     if (updates.last_stripe_awarded_at !== undefined) dbUpdates.last_stripe_awarded_at = updates.last_stripe_awarded_at;
     if (updates.black_belt_degree !== undefined) dbUpdates.black_belt_degree = updates.black_belt_degree;
     if (updates.adult_skill_ratings !== undefined) dbUpdates.adult_skill_ratings = updates.adult_skill_ratings;
+    if (updates.kids_training_started_at !== undefined) dbUpdates.kids_training_started_at = updates.kids_training_started_at;
+    if (updates.kids_last_belt_promotion_at !== undefined) dbUpdates.kids_last_belt_promotion_at = updates.kids_last_belt_promotion_at;
 
     const { error } = await supabase
       .from("students")
@@ -1105,7 +1122,10 @@ export default function CoachDashboardClient() {
     await updateStudent(studentId, {
       belt: nextBelt,
       stripes: 0,
-      belt_awarded_at: today(),
+      belt_awarded_at: isAdultStudent(student) ? today() : student.belt_awarded_at || null,
+      kids_last_belt_promotion_at: isAdultStudent(student)
+        ? student.kids_last_belt_promotion_at || null
+        : today(),
       last_stripe_awarded_at: null,
       black_belt_degree: nextBelt === "Black" ? 0 : student.black_belt_degree || 0,
     });
@@ -1571,7 +1591,31 @@ export default function CoachDashboardClient() {
                         }
                       />
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      <DateDropdown
+                        label="Training Started"
+                        value={selectedStudent.kids_training_started_at}
+                        years={dateYears}
+                        onSave={(value) =>
+                          updateStudent(selectedStudent.id, {
+                            kids_training_started_at: value,
+                          })
+                        }
+                      />
+
+                      <DateDropdown
+                        label="Last Belt Promotion"
+                        value={selectedStudent.kids_last_belt_promotion_at}
+                        years={dateYears}
+                        onSave={(value) =>
+                          updateStudent(selectedStudent.id, {
+                            kids_last_belt_promotion_at: value,
+                          })
+                        }
+                      />
+                    </>
+                  )}
 
                   <label className="ghp-field">
                     <span>Belt Size</span>
@@ -1611,6 +1655,10 @@ export default function CoachDashboardClient() {
                             e.target.value === "Adults" ? today() : null,
                           last_stripe_awarded_at: null,
                           black_belt_degree: 0,
+                          kids_training_started_at:
+                            e.target.value === "Adults" ? null : today(),
+                          kids_last_belt_promotion_at:
+                            e.target.value === "Adults" ? null : today(),
                         })
                       }
                     >
@@ -1691,6 +1739,18 @@ export default function CoachDashboardClient() {
                       </>
                     ) : (
                       <>
+                        <div className="ghp-stat">
+                          <span>Training Time</span>
+                          <strong>{selectedStudent.kidsTrainingYears} yrs</strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Since Last Belt Promotion</span>
+                          <strong>
+                            {selectedStudent.kidsMonthsSinceLastPromotion} / 12 months
+                          </strong>
+                        </div>
+
                         <div className="ghp-stat">
                           <span>A / B / T</span>
                           <strong>
