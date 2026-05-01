@@ -76,12 +76,11 @@ const TIER_PERCENTAGES: Record<2 | 3 | 4, number> = {
 
 const MIN_ATTENDANCE = 8;
 
-const ADULT_MIN_YEARS: Record<string, number> = {
-  White: 2,
-  Blue: 3,
-  Purple: 3,
-  Brown: 2,
-  Black: 0,
+const ADULT_BELT_MONTHS: Record<string, number> = {
+  White: 24,
+  Blue: 36,
+  Purple: 36,
+  Brown: 24,
 };
 
 const BLACK_BELT_DEGREE_YEARS: Record<number, number> = {
@@ -155,6 +154,38 @@ function isAdultStudent(student?: { roster?: string | null }) {
 
 function getStripeMax(student?: { roster?: string | null }) {
   return isAdultStudent(student) ? 4 : 12;
+}
+
+function getMonthsSince(date?: string | null) {
+  if (!date) return 0;
+
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  const now = new Date();
+
+  let months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth());
+
+  if (now.getDate() < start.getDate()) months -= 1;
+
+  return Math.max(months, 0);
+}
+
+function getYearsSince(date?: string | null) {
+  if (!date) return 0;
+
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  const now = new Date();
+  let years = now.getFullYear() - start.getFullYear();
+  const m = now.getMonth() - start.getMonth();
+
+  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--;
+
+  return Math.max(years, 0);
 }
 
 function tierFromAttendance(
@@ -244,25 +275,6 @@ function formatBirthdayMD(birthday?: string | null) {
   return `${month}-${day}`;
 }
 
-function getYearsSince(date?: string | null) {
-  if (!date) return 0;
-
-  const start = new Date(date);
-  if (Number.isNaN(start.getTime())) return 0;
-
-  const now = new Date();
-  let years = now.getFullYear() - start.getFullYear();
-  const m = now.getMonth() - start.getMonth();
-
-  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--;
-
-  return years;
-}
-
-function getAdultMinYears(belt: Belt) {
-  return ADULT_MIN_YEARS[belt] ?? 0;
-}
-
 function getSkillAverage(ratings?: Record<string, number> | null) {
   if (!ratings) return 0;
 
@@ -276,6 +288,10 @@ function getSkillAverage(ratings?: Record<string, number> | null) {
 function getBlackBeltNextDegreeYears(degree?: number | null) {
   const current = Number(degree || 0);
   return BLACK_BELT_DEGREE_YEARS[current] ?? null;
+}
+
+function getRequiredMonthsForAdultBelt(belt: Belt) {
+  return ADULT_BELT_MONTHS[belt] ?? null;
 }
 
 function getPromotionStatus(student: Student) {
@@ -292,15 +308,15 @@ function getPromotionStatus(student: Student) {
     }
 
     const max = getStripeMax(student);
-    const yearsAtBelt = getYearsSince(student.belt_awarded_at);
-    const minYears = getAdultMinYears(student.belt);
+    const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+    const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
 
-    if (student.stripes >= max && yearsAtBelt >= minYears) {
+    if (student.stripes >= max && requiredMonths && monthsAtBelt >= requiredMonths) {
       return "Eligible for next belt";
     }
 
-    if (student.stripes >= max && yearsAtBelt < minYears) {
-      return `Needs time at belt (${yearsAtBelt}/${minYears} yrs)`;
+    if (student.stripes >= max && requiredMonths && monthsAtBelt < requiredMonths) {
+      return `Needs time at belt (${monthsAtBelt}/${requiredMonths} months)`;
     }
 
     return "Eligible for stripe review";
@@ -330,21 +346,14 @@ function StripeDisplay({ stripes, max }: { stripes: number; max: number }) {
         let colorClass = "ghp-stripe-white";
 
         if (max === 12) {
-          if (stripeNumber >= 5 && stripeNumber <= 8) {
-            colorClass = "ghp-stripe-yellow";
-          }
-
-          if (stripeNumber >= 9) {
-            colorClass = "ghp-stripe-red";
-          }
+          if (stripeNumber >= 5 && stripeNumber <= 8) colorClass = "ghp-stripe-yellow";
+          if (stripeNumber >= 9) colorClass = "ghp-stripe-red";
         }
 
         return (
           <span
             key={stripeNumber}
-            className={`ghp-stripe ${
-              isEarned ? colorClass : "ghp-stripe-empty"
-            }`}
+            className={`ghp-stripe ${isEarned ? colorClass : "ghp-stripe-empty"}`}
           />
         );
       })}
@@ -680,9 +689,12 @@ export default function CoachDashboardClient() {
       const fastTrackReview = adult && fastTrackAverage >= 4;
 
       const yearsAtBelt = getYearsSince(student.belt_awarded_at);
+      const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+      const requiredMonthsAtBelt =
+        adult && !blackBelt ? getRequiredMonthsForAdultBelt(student.belt) : null;
+
       const trainingYears = getYearsSince(student.training_started_at);
       const yearsSinceLastStripe = getYearsSince(student.last_stripe_awarded_at);
-      const minYearsAtBelt = adult ? getAdultMinYears(student.belt) : 0;
 
       const blackDegree = Number(student.black_belt_degree || 0);
       const blackDegreeRequiredYears = blackBelt
@@ -697,7 +709,8 @@ export default function CoachDashboardClient() {
         adult &&
         !blackBelt &&
         student.stripes >= getStripeMax(student) &&
-        yearsAtBelt >= minYearsAtBelt;
+        requiredMonthsAtBelt !== null &&
+        monthsAtBelt >= requiredMonthsAtBelt;
 
       const eligible = adult
         ? fastTrackReview || adultNextBeltEligible || blackDegreeEligible
@@ -744,9 +757,10 @@ export default function CoachDashboardClient() {
         promotionStatus: getPromotionStatus(student),
         stripeMax: getStripeMax(student),
         yearsAtBelt,
+        monthsAtBelt,
+        requiredMonthsAtBelt,
         trainingYears,
         yearsSinceLastStripe,
-        minYearsAtBelt,
         skillAverage,
         blackDegree,
         blackDegreeRequiredYears,
@@ -789,8 +803,7 @@ export default function CoachDashboardClient() {
       return dayA - dayB;
     });
 
-  const selectedStudent =
-    summaries.find((s) => s.id === selectedStudentId) || null;
+  const selectedStudent = summaries.find((s) => s.id === selectedStudentId) || null;
 
   async function saveMonthlySettings(month: string, classes: number) {
     const { error } = await supabase
@@ -1595,13 +1608,15 @@ export default function CoachDashboardClient() {
                         <div className="ghp-stat">
                           <span>Time at Grade</span>
                           <strong>
-                            {selectedStudent.yearsAtBelt}
-                            {selectedStudent.blackBelt &&
-                            selectedStudent.blackDegreeRequiredYears !== null
-                              ? `/${selectedStudent.blackDegreeRequiredYears}`
-                              : selectedStudent.minYearsAtBelt
-                              ? `/${selectedStudent.minYearsAtBelt}`
-                              : ""}
+                            {selectedStudent.blackBelt
+                              ? `${selectedStudent.yearsAtBelt}${
+                                  selectedStudent.blackDegreeRequiredYears !== null
+                                    ? `/${selectedStudent.blackDegreeRequiredYears} yrs`
+                                    : " yrs"
+                                }`
+                              : `${selectedStudent.monthsAtBelt} / ${
+                                  selectedStudent.requiredMonthsAtBelt || 0
+                                } months`}
                           </strong>
                         </div>
 
