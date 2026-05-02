@@ -729,13 +729,18 @@ export default function CoachDashboardClient() {
   }, [students, activeRoster]);
 
   useEffect(() => {
+    if (activeRoster === "Stripe Queue") {
+      setSelectedStudentId(null);
+      return;
+    }
+
     if (rosterStudents.length > 0) {
       const visible = rosterStudents.find((s) => s.id === selectedStudentId);
       if (!visible) setSelectedStudentId(rosterStudents[0].id);
     } else {
       setSelectedStudentId(null);
     }
-  }, [rosterStudents, selectedStudentId]);
+  }, [activeRoster, rosterStudents, selectedStudentId]);
 
   function getCareerStickerTotal(studentId: string): number {
     const studentSessions = sessions.filter((s) => s.student_id === studentId);
@@ -892,7 +897,7 @@ export default function CoachDashboardClient() {
   const visibleSummaries = summaries
     .filter((s) => {
       if (activeRoster === "Stripe Queue") {
-        return s.snapshot?.eligible && s.snapshot.coach_decision === "Pending";
+        return !s.adult && s.snapshot?.eligible && s.snapshot.coach_decision === "Pending";
       }
 
       return (s.roster || "Wildlings") === activeRoster;
@@ -926,7 +931,10 @@ export default function CoachDashboardClient() {
       return dayA - dayB;
     });
 
-  const selectedStudent = summaries.find((s) => s.id === selectedStudentId) || null;
+  const selectedStudent =
+    activeRoster === "Stripe Queue"
+      ? null
+      : summaries.find((s) => s.id === selectedStudentId) || null;
 
   const youthLeaderboard = useMemo(() => {
     return students
@@ -1562,7 +1570,7 @@ export default function CoachDashboardClient() {
 
       <section className="ghp-dash-toolbar">
         <label className="ghp-field">
-          <span>Date</span>
+          <span>{activeRoster === "Stripe Queue" ? "Review Month" : "Class Date"}</span>
           <input
             type="date"
             value={selectedDate}
@@ -1570,53 +1578,70 @@ export default function CoachDashboardClient() {
           />
         </label>
 
-        <label className="ghp-field">
-          <span>Youth Classes This Month</span>
-          <input type="number" value={kidsAvailableClasses} disabled readOnly />
-        </label>
+        <div className="ghp-mini-stat">
+          <span>Youth Classes</span>
+          <strong>{kidsAvailableClasses}</strong>
+        </div>
 
-        <label className="ghp-field">
-          <span>Adult Classes This Month</span>
-          <input type="number" value={adultsAvailableClasses} disabled readOnly />
-        </label>
+        <div className="ghp-mini-stat">
+          <span>Adult Classes</span>
+          <strong>{adultsAvailableClasses}</strong>
+        </div>
 
-        <button onClick={calculateMonthlySnapshots} className="ghp-btn ghp-btn-primary">
-          Calculate Month
-        </button>
+        {activeRoster === "Stripe Queue" ? (
+          <>
+            <button onClick={calculateMonthlySnapshots} className="ghp-btn ghp-btn-primary">
+              Calculate Month
+            </button>
 
-        <button onClick={lockMonth} className="ghp-btn ghp-btn-ghost">
-          Lock Month
-        </button>
-
-        <label className="ghp-field ghp-field-wide">
-          <span>Student Name</span>
-          <input
-            type="text"
-            value={newStudentName}
-            onChange={(e) => setNewStudentName(e.target.value)}
-            placeholder={`Add a student to ${
-              activeRoster === "Stripe Queue" ? "Wildlings" : activeRoster
-            }`}
-          />
-        </label>
-
-        <label className="ghp-field">
-          <span>Starting Belt</span>
-          <select
-            value={newStudentBelt}
-            onChange={(e) => setNewStudentBelt(e.target.value as Belt)}
+            <button onClick={lockMonth} className="ghp-btn ghp-btn-danger">
+              Lock Month
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="ghp-btn ghp-btn-ghost"
+            onClick={() => {
+              const form = document.getElementById("ghp-add-student-form");
+              form?.classList.toggle("ghp-hidden");
+            }}
           >
-            {selectedBeltOptions.map((belt) => (
-              <option key={belt} value={belt}>
-                {belt}
-              </option>
-            ))}
-          </select>
-        </label>
+            + Add Student
+          </button>
+        )}
 
-        <button onClick={addStudent} className="ghp-btn ghp-btn-primary">
-          Add Student
-        </button>
+        {activeRoster !== "Stripe Queue" ? (
+          <div id="ghp-add-student-form" className="ghp-add-student-panel ghp-hidden">
+            <label className="ghp-field ghp-field-wide">
+              <span>Student Name</span>
+              <input
+                type="text"
+                value={newStudentName}
+                onChange={(e) => setNewStudentName(e.target.value)}
+                placeholder={`Add a student to ${activeRoster}`}
+              />
+            </label>
+
+            <label className="ghp-field">
+              <span>Starting Belt</span>
+              <select
+                value={newStudentBelt}
+                onChange={(e) => setNewStudentBelt(e.target.value as Belt)}
+              >
+                {selectedBeltOptions.map((belt) => (
+                  <option key={belt} value={belt}>
+                    {belt}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button onClick={addStudent} className="ghp-btn ghp-btn-primary">
+              Save Student
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="ghp-dash-grid">
@@ -1845,11 +1870,44 @@ export default function CoachDashboardClient() {
             </div>
           ) : null}
 
-          <div className="ghp-dash-card">
-            {!selectedStudent ? (
-              <div className="ghp-empty">Select a student.</div>
-            ) : (
-              <>
+          {activeRoster === "Stripe Queue" ? (
+            <div className="ghp-dash-card">
+              <div className="ghp-dash-card-header">
+                <h2>Month-End Review</h2>
+                <p>
+                  This screen is only for kid stripe decisions. Adult profiles and daily
+                  tracking are hidden here so the queue stays clean.
+                </p>
+              </div>
+
+              <div className="ghp-stat-grid">
+                <div className="ghp-stat">
+                  <span>Review Month</span>
+                  <strong>{currentMonth}</strong>
+                </div>
+
+                <div className="ghp-stat">
+                  <span>Pending Stripes</span>
+                  <strong>{visibleSummaries.length}</strong>
+                </div>
+
+                <div className="ghp-stat">
+                  <span>Youth Classes</span>
+                  <strong>{kidsAvailableClasses}</strong>
+                </div>
+
+                <div className="ghp-stat">
+                  <span>Status</span>
+                  <strong>{monthLocked ? "Locked" : "Open"}</strong>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="ghp-dash-card">
+              {!selectedStudent ? (
+                <div className="ghp-empty">Select a student.</div>
+              ) : (
+                <>
                 <div className="ghp-dash-card-header">
                   <h2>Student Profile</h2>
                   <p>Edit dates, belt size, notes, and promotion status.</p>
@@ -2315,6 +2373,7 @@ export default function CoachDashboardClient() {
               </>
             )}
           </div>
+          )}
         </div>
       </section>
     </main>
