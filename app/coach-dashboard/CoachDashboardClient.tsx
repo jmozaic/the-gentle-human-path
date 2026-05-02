@@ -86,7 +86,7 @@ const KIDS_BELTS: Belt[] = [
 
 const ADULT_BELTS: Belt[] = ["White", "Blue", "Purple", "Brown", "Black"];
 
-const DEFAULT_ROSTERS = ["Stripe Queue", "Wildlings", "Hunters", "Adults"];
+const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults", "Stripe Queue", "Needs Attention", "Birthdays"];
 const REAL_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
 const MIN_ATTENDANCE = 8;
@@ -166,6 +166,12 @@ function monthKey(dateString: string) {
 function getPreviousMonth(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const date = new Date(year, monthNumber - 2, 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function getNextMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber, 1);
   return date.toISOString().slice(0, 7);
 }
 
@@ -354,6 +360,13 @@ function getBirthdayThisMonth(birthday?: string | null, selectedDate?: string) {
   if (!birthday || !selectedDate) return false;
   const [, month] = birthday.split("-");
   const selectedMonth = selectedDate.slice(5, 7);
+  return month === selectedMonth;
+}
+
+function getBirthdayInMonth(birthday?: string | null, monthKeyValue?: string) {
+  if (!birthday || !monthKeyValue) return false;
+  const [, month] = birthday.split("-");
+  const selectedMonth = monthKeyValue.slice(5, 7);
   return month === selectedMonth;
 }
 
@@ -601,6 +614,7 @@ export default function CoachDashboardClient() {
 
   const currentMonth = monthKey(selectedDate);
   const previousMonth = getPreviousMonth(currentMonth);
+  const nextMonth = getNextMonth(currentMonth);
 
   const kidsAvailableClasses = countClassDaysInMonth(currentMonth, [1, 2, 3, 4]);
   const adultsAvailableClasses = countClassDaysInMonth(currentMonth, [1, 2, 3, 4, 5]);
@@ -724,12 +738,23 @@ export default function CoachDashboardClient() {
   }, [customRosters]);
 
   const rosterStudents = useMemo(() => {
-    if (activeRoster === "Stripe Queue") return students;
+    if (
+      activeRoster === "Stripe Queue" ||
+      activeRoster === "Needs Attention" ||
+      activeRoster === "Birthdays"
+    ) {
+      return students;
+    }
+
     return students.filter((s) => (s.roster || "Wildlings") === activeRoster);
   }, [students, activeRoster]);
 
   useEffect(() => {
-    if (activeRoster === "Stripe Queue") {
+    if (
+      activeRoster === "Stripe Queue" ||
+      activeRoster === "Needs Attention" ||
+      activeRoster === "Birthdays"
+    ) {
       setSelectedStudentId(null);
       return;
     }
@@ -900,6 +925,14 @@ export default function CoachDashboardClient() {
         return !s.adult && s.snapshot?.eligible && s.snapshot.coach_decision === "Pending";
       }
 
+      if (activeRoster === "Needs Attention") {
+        return !s.adult && Boolean(s.snapshot) && !s.snapshot?.eligible;
+      }
+
+      if (activeRoster === "Birthdays") {
+        return false;
+      }
+
       return (s.roster || "Wildlings") === activeRoster;
     })
     .sort((a, b) => {
@@ -931,14 +964,30 @@ export default function CoachDashboardClient() {
       return dayA - dayB;
     });
 
+  const upcomingBirthdayStudents = summaries
+    .filter((student) => getBirthdayInMonth(student.birthday, nextMonth))
+    .sort((a, b) => {
+      const dayA = a.birthday ? Number(a.birthday.split("-")[2]) : 0;
+      const dayB = b.birthday ? Number(b.birthday.split("-")[2]) : 0;
+      return dayA - dayB;
+    });
+
+  const missingBirthdayStudents = summaries
+    .filter((student) => !student.birthday)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const selectedStudent =
-    activeRoster === "Stripe Queue"
+    activeRoster === "Stripe Queue" ||
+    activeRoster === "Needs Attention" ||
+    activeRoster === "Birthdays"
       ? null
       : summaries.find((s) => s.id === selectedStudentId) || null;
 
-  const youthLeaderboard = useMemo(() => {
+  const classLeaderboard = useMemo(() => {
+    if (activeRoster !== "Wildlings" && activeRoster !== "Hunters") return [];
+
     return students
-      .filter((student) => !isAdultStudent(student))
+      .filter((student) => (student.roster || "Wildlings") === activeRoster)
       .map((student) => {
         const monthSessions = sessions.filter(
           (s) => s.student_id === student.id && monthKey(s.date) === previousMonth
@@ -955,6 +1004,7 @@ export default function CoachDashboardClient() {
 
         const behaviorPct = attendance > 0 ? (behavior / attendance) * 100 : 0;
         const techniquePct = attendance > 0 ? (technique / attendance) * 100 : 0;
+
         const score = Math.round((attendancePct + behaviorPct + techniquePct) / 3);
 
         return {
@@ -969,7 +1019,7 @@ export default function CoachDashboardClient() {
       .filter((s) => s.attendance > 0)
       .sort((a, b) => b.score - a.score || b.attendance - a.attendance)
       .slice(0, 5);
-  }, [students, sessions, previousMonth, previousMonthYouthClasses]);
+  }, [activeRoster, students, sessions, previousMonth, previousMonthYouthClasses]);
 
   const adultLeaderboard = useMemo(() => {
     return students
@@ -997,6 +1047,25 @@ export default function CoachDashboardClient() {
       .sort((a, b) => b.attendance - a.attendance || b.attendancePct - a.attendancePct)
       .slice(0, 5);
   }, [students, sessions, previousMonth, previousMonthAdultClasses]);
+
+  function getNeedsAttentionReason(snapshot?: MonthlySnapshot) {
+    if (!snapshot) return "No monthly snapshot";
+    const reasons: string[] = [];
+
+    if (snapshot.attendance_count < MIN_ATTENDANCE) {
+      reasons.push("Not Enough Classes");
+    }
+
+    if (snapshot.behavior_count < snapshot.behavior_required) {
+      reasons.push("Behavior Below Standard");
+    }
+
+    if (snapshot.technique_count < snapshot.technique_required) {
+      reasons.push("Technique Below Standard");
+    }
+
+    return reasons.length > 0 ? reasons.join(" + ") : "Needs Coach Review";
+  }
 
   async function calculateMonthlySnapshots() {
     setMessage("Calculating month...");
@@ -1598,7 +1667,7 @@ export default function CoachDashboardClient() {
               Lock Month
             </button>
           </>
-        ) : (
+        ) : activeRoster === "Needs Attention" || activeRoster === "Birthdays" ? null : (
           <button
             type="button"
             className="ghp-btn ghp-btn-ghost"
@@ -1611,7 +1680,9 @@ export default function CoachDashboardClient() {
           </button>
         )}
 
-        {activeRoster !== "Stripe Queue" ? (
+        {activeRoster !== "Stripe Queue" &&
+        activeRoster !== "Needs Attention" &&
+        activeRoster !== "Birthdays" ? (
           <div id="ghp-add-student-form" className="ghp-add-student-panel ghp-hidden">
             <label className="ghp-field ghp-field-wide">
               <span>Student Name</span>
@@ -1651,6 +1722,10 @@ export default function CoachDashboardClient() {
             <p>
               {activeRoster === "Stripe Queue"
                 ? "Students who met ABT and need approval or denial."
+                : activeRoster === "Needs Attention"
+                ? "Students who did not meet the monthly ABT requirements."
+                : activeRoster === "Birthdays"
+                ? "Birthday list for the selected month, next month, and missing birthdays."
                 : activeRoster === "Adults"
                 ? "Adults use attendance only and adult criteria."
                 : "Kids use A / B / T / S and month-end stripe calculation."}
@@ -1658,16 +1733,100 @@ export default function CoachDashboardClient() {
           </div>
 
           <div className="ghp-sheet">
-            {visibleSummaries.map((student) => {
+            {activeRoster === "Birthdays" ? (
+              <div style={{ padding: "18px", display: "grid", gap: "22px" }}>
+                <div>
+                  <div className="ghp-dash-card-header">
+                    <h2>This Month</h2>
+                    <p>Birthdays during the selected month.</p>
+                  </div>
+
+                  <div className="ghp-birthday-list">
+                    {birthdayStudents.length > 0 ? (
+                      birthdayStudents.map((student) => (
+                        <div key={student.id} className="ghp-birthday-row">
+                          <div>
+                            <div className="ghp-sheet-student">{student.name}</div>
+                            <div className="ghp-sheet-meta">
+                              {student.roster || "Wildlings"} • {formatBirthdayMD(student.birthday)}
+                            </div>
+                          </div>
+
+                          <div className="ghp-birthday-age">
+                            Turns {getUpcomingAge(student.birthday, selectedDate)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="ghp-sheet-empty">No birthdays this month.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="ghp-dash-card-header">
+                    <h2>Next Month</h2>
+                    <p>Upcoming birthdays for the next calendar month.</p>
+                  </div>
+
+                  <div className="ghp-birthday-list">
+                    {upcomingBirthdayStudents.length > 0 ? (
+                      upcomingBirthdayStudents.map((student) => (
+                        <div key={student.id} className="ghp-birthday-row">
+                          <div>
+                            <div className="ghp-sheet-student">{student.name}</div>
+                            <div className="ghp-sheet-meta">
+                              {student.roster || "Wildlings"} • {formatBirthdayMD(student.birthday)}
+                            </div>
+                          </div>
+
+                          <div className="ghp-birthday-age">Next Month</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="ghp-sheet-empty">No birthdays next month.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="ghp-dash-card-header">
+                    <h2>Missing Birthdays</h2>
+                    <p>Students who still need a birthday added to their profile.</p>
+                  </div>
+
+                  <div className="ghp-birthday-list">
+                    {missingBirthdayStudents.length > 0 ? (
+                      missingBirthdayStudents.map((student) => (
+                        <div key={student.id} className="ghp-birthday-row">
+                          <div>
+                            <div className="ghp-sheet-student">{student.name}</div>
+                            <div className="ghp-sheet-meta">{student.roster || "Wildlings"}</div>
+                          </div>
+
+                          <div className="ghp-birthday-age">Missing</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="ghp-sheet-empty">No missing birthdays.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {visibleSummaries.map((student) => {
               const session = getSession(student.id, selectedDate);
               const isQueue = activeRoster === "Stripe Queue";
+              const isNeedsAttention = activeRoster === "Needs Attention";
+              const isReview = isQueue || isNeedsAttention;
 
               return (
                 <div
                   className="ghp-sheet-row"
                   key={student.id}
                   style={
-                    isQueue
+                    isReview
                       ? { gridTemplateColumns: "minmax(180px, 1fr) 380px" }
                       : {
                           gridTemplateColumns:
@@ -1698,34 +1857,38 @@ export default function CoachDashboardClient() {
                       {isQueue && student.snapshot
                         ? ` • ${student.snapshot.behavior_count}/${student.snapshot.behavior_required} B • ${student.snapshot.technique_count}/${student.snapshot.technique_required} T`
                         : ""}
+                      {isNeedsAttention && student.snapshot
+                        ? ` • ${getNeedsAttentionReason(student.snapshot)} • A ${student.snapshot.attendance_count}/8 • B ${student.snapshot.behavior_count}/${student.snapshot.behavior_required} • T ${student.snapshot.technique_count}/${student.snapshot.technique_required}`
+                        : ""}
                     </div>
                   </div>
 
-                  {isQueue ? (
+                  {isReview ? (
                     <div
                       className="col-view"
                       style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
                     >
-                      <button
-                        onClick={() => setSelectedStudentId(student.id)}
-                        className="ghp-btn ghp-btn-ghost ghp-btn-small"
-                      >
-                        View
-                      </button>
+                      {isQueue ? (
+                        <>
+                          <button
+                            onClick={() => approveSnapshot(student.id)}
+                            className="ghp-btn ghp-btn-primary"
+                          >
+                            Approve
+                          </button>
 
-                      <button
-                        onClick={() => approveSnapshot(student.id)}
-                        className="ghp-btn ghp-btn-primary"
-                      >
-                        Approve
-                      </button>
-
-                      <button
-                        onClick={() => denySnapshot(student.id)}
-                        className="ghp-btn ghp-btn-danger"
-                      >
-                        Deny
-                      </button>
+                          <button
+                            onClick={() => denySnapshot(student.id)}
+                            className="ghp-btn ghp-btn-danger"
+                          >
+                            Deny
+                          </button>
+                        </>
+                      ) : (
+                        <strong className="ghp-gold">
+                          {getNeedsAttentionReason(student.snapshot)}
+                        </strong>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -1789,94 +1952,92 @@ export default function CoachDashboardClient() {
                   )}
                 </div>
               );
-            })}
+                })}
+              </>
+            )}
 
-            {visibleSummaries.length === 0 ? (
-              <div className="ghp-sheet-empty">No students here yet.</div>
+            {activeRoster !== "Birthdays" && visibleSummaries.length === 0 ? (
+              <div className="ghp-sheet-empty">
+                {activeRoster === "Needs Attention"
+                  ? "No students need attention for this month."
+                  : "No students here yet."}
+              </div>
             ) : null}
           </div>
         </div>
 
         <div>
-          <div className="ghp-dash-card" style={{ marginBottom: "16px" }}>
-            <div className="ghp-dash-card-header">
-              <h2>
-                {activeRoster === "Adults"
-                  ? `Adult Attendance Leaders (${previousMonth})`
-                  : `Youth Leaders (${previousMonth})`}
-              </h2>
-              <p>
-                {activeRoster === "Adults"
-                  ? "Previous month adult leaderboard based on attendance."
-                  : "Previous month youth leaderboard based on attendance, behavior, and technique."}
-              </p>
-            </div>
-
-            <div className="ghp-birthday-list">
-              {activeRoster === "Adults"
-                ? adultLeaderboard.map((student, index) => (
-                    <div key={student.id} className="ghp-birthday-row">
-                      <div>
-                        <div className="ghp-sheet-student">
-                          {index + 1}. {student.name}
-                        </div>
-                        <div className="ghp-sheet-meta">
-                          Attendance {student.attendance}/{previousMonthAdultClasses}
-                        </div>
-                      </div>
-                      <div className="ghp-birthday-age">{student.attendancePct}%</div>
-                    </div>
-                  ))
-                : youthLeaderboard.map((student, index) => (
-                    <div key={student.id} className="ghp-birthday-row">
-                      <div>
-                        <div className="ghp-sheet-student">
-                          {index + 1}. {student.name}
-                        </div>
-                        <div className="ghp-sheet-meta">
-                          A/B/T {student.attendance}/{student.behavior}/{student.technique}
-                        </div>
-                      </div>
-                      <div className="ghp-birthday-age">{student.score}%</div>
-                    </div>
-                  ))}
-            </div>
-          </div>
-
-          {birthdayStudents.length > 0 ? (
+          {activeRoster === "Wildlings" || activeRoster === "Hunters" || activeRoster === "Adults" ? (
             <div className="ghp-dash-card" style={{ marginBottom: "16px" }}>
               <div className="ghp-dash-card-header">
-                <h2>Birthdays This Month</h2>
-                <p>Students with birthdays during the selected month.</p>
+                <h2>
+                  {activeRoster === "Adults"
+                    ? `Adult Attendance Leaders (${previousMonth})`
+                    : `${activeRoster} Leaders (${previousMonth})`}
+                </h2>
+                <p>
+                  {activeRoster === "Adults"
+                    ? "Previous month adult leaderboard based on attendance."
+                    : `Previous month ${activeRoster} leaderboard based on attendance, behavior, and technique.`}
+                </p>
               </div>
 
               <div className="ghp-birthday-list">
-                {birthdayStudents.map((student) => (
-                  <div key={student.id} className="ghp-birthday-row">
-                    <div>
-                      <div className="ghp-sheet-student">{student.name}</div>
-                      <div className="ghp-sheet-meta">
-                        {student.roster || "Wildlings"} •{" "}
-                        {formatBirthdayMD(student.birthday)}
+                {activeRoster === "Adults"
+                  ? adultLeaderboard.map((student, index) => (
+                      <div key={student.id} className="ghp-birthday-row">
+                        <div>
+                          <div className="ghp-sheet-student">
+                            {index + 1}. {student.name}
+                          </div>
+                          <div className="ghp-sheet-meta">
+                            Attendance {student.attendance}/{previousMonthAdultClasses}
+                          </div>
+                        </div>
+                        <div className="ghp-birthday-age">{student.attendancePct}%</div>
                       </div>
-                    </div>
+                    ))
+                  : classLeaderboard.map((student, index) => (
+                      <div key={student.id} className="ghp-birthday-row">
+                        <div>
+                          <div className="ghp-sheet-student">
+                            {index + 1}. {student.name}
+                          </div>
+                          <div className="ghp-sheet-meta">
+                            A/B/T {student.attendance}/{student.behavior}/{student.technique}
+                          </div>
+                        </div>
+                        <div className="ghp-birthday-age">{student.score}%</div>
+                      </div>
+                    ))}
 
-                    <div className="ghp-birthday-age">
-                      Turns {getUpcomingAge(student.birthday, selectedDate)}
-                    </div>
-                  </div>
-                ))}
+                {activeRoster === "Adults" && adultLeaderboard.length === 0 ? (
+                  <div className="ghp-sheet-empty">No adult attendance yet for {previousMonth}.</div>
+                ) : null}
+
+                {activeRoster !== "Adults" && classLeaderboard.length === 0 ? (
+                  <div className="ghp-sheet-empty">No {activeRoster} attendance yet for {previousMonth}.</div>
+                ) : null}
               </div>
             </div>
           ) : null}
 
-          {activeRoster === "Stripe Queue" ? (
+          {activeRoster === "Stripe Queue" || activeRoster === "Needs Attention" || activeRoster === "Birthdays" ? (
             <div className="ghp-dash-card">
               <div className="ghp-dash-card-header">
-                <h2>Month-End Review</h2>
+                <h2>
+                  {activeRoster === "Birthdays"
+                    ? "Birthday Center"
+                    : activeRoster === "Needs Attention"
+                    ? "Needs Attention"
+                    : "Month-End Review"}
+                </h2>
                 <p>
-                  This screen is only for kid stripe decisions. Adult profiles and daily
-                  tracking are hidden here so the queue stays clean.
+                  {activeRoster === "Birthdays"
+                    ? "Birthday tracking is separated from daily class tracking."
+                    : activeRoster === "Needs Attention"
+                    ? "This screen shows kids who did not meet monthly ABT requirements."
+                    : "This screen is only for kid stripe decisions. Adult profiles and daily tracking are hidden here so the queue stays clean."}
                 </p>
               </div>
 
@@ -1887,13 +2048,29 @@ export default function CoachDashboardClient() {
                 </div>
 
                 <div className="ghp-stat">
-                  <span>Pending Stripes</span>
-                  <strong>{visibleSummaries.length}</strong>
+                  <span>
+                    {activeRoster === "Needs Attention"
+                      ? "Needs Attention"
+                      : activeRoster === "Birthdays"
+                      ? "This Month"
+                      : "Pending Stripes"}
+                  </span>
+                  <strong>
+                    {activeRoster === "Birthdays"
+                      ? birthdayStudents.length
+                      : visibleSummaries.length}
+                  </strong>
                 </div>
 
                 <div className="ghp-stat">
-                  <span>Youth Classes</span>
-                  <strong>{kidsAvailableClasses}</strong>
+                  <span>
+                    {activeRoster === "Birthdays" ? "Missing Birthdays" : "Youth Classes"}
+                  </span>
+                  <strong>
+                    {activeRoster === "Birthdays"
+                      ? missingBirthdayStudents.length
+                      : kidsAvailableClasses}
+                  </strong>
                 </div>
 
                 <div className="ghp-stat">
