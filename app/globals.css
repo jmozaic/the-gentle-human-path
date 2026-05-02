@@ -1865,3 +1865,13 @@ h3,
 .ghp-skill-top input {
   width: 70px;
 }
+.ghp-bubble.active-s {
+  background: #fce7e7;
+  border-color: #b91c1c;
+  color: #7f1d1d;
+}
+
+.ghp-bubble:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

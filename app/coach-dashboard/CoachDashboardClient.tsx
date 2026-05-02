@@ -32,13 +32,11 @@ type Student = {
   roster?: string | null;
   belt_size?: string | null;
   parent_email?: string | null;
-
   belt_awarded_at?: string | null;
   training_started_at?: string | null;
   last_stripe_awarded_at?: string | null;
   black_belt_degree?: number | null;
   adult_skill_ratings?: Record<string, number> | null;
-
   kids_training_started_at?: string | null;
   kids_last_belt_promotion_at?: string | null;
 };
@@ -68,7 +66,6 @@ type MonthlySnapshot = {
   eligible: boolean;
   coach_decision: "Pending" | "Approved" | "Denied";
   deny_reason?: string | null;
-  calculated_at?: string | null;
 };
 
 const KIDS_BELTS: Belt[] = [
@@ -92,7 +89,7 @@ const ADULT_BELTS: Belt[] = ["White", "Blue", "Purple", "Brown", "Black"];
 const DEFAULT_ROSTERS = ["Stripe Queue", "Wildlings", "Hunters", "Adults"];
 const REAL_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
-const MIN_KID_ATTENDANCE = 8;
+const MIN_ATTENDANCE = 8;
 
 const ADULT_BELT_MONTHS: Record<string, number> = {
   White: 24,
@@ -158,19 +155,34 @@ const MONTHS = [
   { value: "12", label: "Dec" },
 ];
 
-const DENY_REASONS = [
-  "Needs more time",
-  "Behavior inconsistency",
-  "Technical understanding",
-  "Other",
-];
-
-function today(): string {
+function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function monthKey(dateString: string): string {
+function monthKey(dateString: string) {
   return dateString.slice(0, 7);
+}
+
+function getPreviousMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 2, 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function countClassDaysInMonth(month: string, allowedDays: number[]) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+
+  let count = 0;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, monthNumber - 1, day);
+    const weekday = date.getDay();
+
+    if (allowedDays.includes(weekday)) count++;
+  }
+
+  return count;
 }
 
 function isAdultStudent(student?: { roster?: string | null }) {
@@ -183,24 +195,20 @@ function getStripeMax(student?: { roster?: string | null }) {
 
 function getMonthsSince(date?: string | null) {
   if (!date) return 0;
-
   const start = new Date(date);
   if (Number.isNaN(start.getTime())) return 0;
 
   const now = new Date();
-
   let months =
     (now.getFullYear() - start.getFullYear()) * 12 +
     (now.getMonth() - start.getMonth());
 
   if (now.getDate() < start.getDate()) months -= 1;
-
   return Math.max(months, 0);
 }
 
 function getYearsSince(date?: string | null) {
   if (!date) return 0;
-
   const start = new Date(date);
   if (Number.isNaN(start.getTime())) return 0;
 
@@ -209,59 +217,90 @@ function getYearsSince(date?: string | null) {
   const m = now.getMonth() - start.getMonth();
 
   if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--;
-
   return Math.max(years, 0);
 }
 
-function getDateParts(date?: string | null) {
-  if (!date) return { month: "", day: "", year: "" };
-
-  const [year, month, day] = date.split("-");
-  return { month: month || "", day: day || "", year: year || "" };
+function getFinalTier(attendance: number): 2 | 3 | 4 {
+  if (attendance >= 14) return 4;
+  if (attendance >= 10) return 3;
+  return 2;
 }
 
-function padDatePart(value: string | number) {
-  return String(value).padStart(2, "0");
+function getTierBase(tier: number) {
+  if (tier === 4) return 14;
+  if (tier === 3) return 10;
+  return 8;
 }
 
-function getAge(birthday?: string | null) {
-  if (!birthday) return null;
+function getRequiredForTier(tier: number) {
+  const base = getTierBase(tier);
 
-  const birth = new Date(birthday);
-  if (Number.isNaN(birth.getTime())) return null;
-
-  const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const m = now.getMonth() - birth.getMonth();
-
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-
-  return age;
+  return {
+    behaviorRequired: Math.ceil(base * 0.9),
+    techniqueRequired: Math.ceil(base * 0.9),
+  };
 }
 
-function getBirthdayThisMonth(birthday?: string | null, selectedDate?: string) {
-  if (!birthday || !selectedDate) return false;
+function getProjectedTier(attendance: number, selectedDate: string): 2 | 3 | 4 | null {
+  if (attendance < 8) return null;
 
-  const [, month] = birthday.split("-");
-  const selectedMonth = selectedDate.slice(5, 7);
+  const date = new Date(selectedDate);
+  const day = Math.max(date.getDate(), 1);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const projected = (attendance / day) * daysInMonth;
 
-  return month === selectedMonth;
+  if (projected >= 14) return 4;
+  if (projected >= 10) return 3;
+  return 2;
 }
 
-function getUpcomingAge(birthday?: string | null, selectedDate?: string) {
-  if (!birthday || !selectedDate) return null;
+function getKidSnapshotStatus(attendance: number, behavior: number, technique: number) {
+  const finalTier = getFinalTier(attendance);
+  const { behaviorRequired, techniqueRequired } = getRequiredForTier(finalTier);
 
-  const birth = new Date(birthday);
-  if (Number.isNaN(birth.getTime())) return null;
+  if (attendance < MIN_ATTENDANCE) {
+    return {
+      finalTier,
+      behaviorRequired,
+      techniqueRequired,
+      status: "Not Eligible",
+      eligible: false,
+    };
+  }
 
-  const selected = new Date(selectedDate);
-  return selected.getFullYear() - birth.getFullYear();
-}
+  if (behavior >= behaviorRequired && technique >= techniqueRequired) {
+    return {
+      finalTier,
+      behaviorRequired,
+      techniqueRequired,
+      status: "Stripe Eligible (ABT Met)",
+      eligible: true,
+    };
+  }
 
-function formatBirthdayMD(birthday?: string | null) {
-  if (!birthday) return "";
-  const [, month, day] = birthday.split("-");
-  return `${month}-${day}`;
+  const behaviorPct = behaviorRequired > 0 ? behavior / behaviorRequired : 0;
+  const techniquePct = techniqueRequired > 0 ? technique / techniqueRequired : 0;
+  const combined = (behaviorPct + techniquePct) / 2;
+
+  if (combined >= 0.75) {
+    return {
+      finalTier,
+      behaviorRequired,
+      techniqueRequired,
+      status: "Close",
+      eligible: false,
+    };
+  }
+
+  return {
+    finalTier,
+    behaviorRequired,
+    techniqueRequired,
+    status: "Not Eligible",
+    eligible: false,
+  };
 }
 
 function getCurrentStreak(sessions: Session[]) {
@@ -288,109 +327,48 @@ function getCurrentStreak(sessions: Session[]) {
   return streak;
 }
 
-function getFinalTier(attendance: number): 2 | 3 | 4 {
-  if (attendance >= 14) return 4;
-  if (attendance >= 10) return 3;
-  return 2;
+function getAge(birthday?: string | null) {
+  if (!birthday) return null;
+  const birth = new Date(birthday);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
 }
 
-function getTierBase(tier: number) {
-  if (tier === 4) return 14;
-  if (tier === 3) return 10;
-  return 8;
+function getDateParts(date?: string | null) {
+  if (!date) return { month: "", day: "", year: "" };
+  const [year, month, day] = date.split("-");
+  return { month: month || "", day: day || "", year: year || "" };
 }
 
-function getRequiredForTier(tier: number) {
-  const base = getTierBase(tier);
-
-  return {
-    behaviorRequired: Math.ceil(base * 0.9),
-    techniqueRequired: Math.ceil(base * 0.9),
-  };
+function padDatePart(value: string | number) {
+  return String(value).padStart(2, "0");
 }
 
-function getDaysInMonth(dateString: string) {
-  const date = new Date(dateString);
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+function getBirthdayThisMonth(birthday?: string | null, selectedDate?: string) {
+  if (!birthday || !selectedDate) return false;
+  const [, month] = birthday.split("-");
+  const selectedMonth = selectedDate.slice(5, 7);
+  return month === selectedMonth;
 }
 
-function getDayOfMonth(dateString: string) {
-  return new Date(dateString).getDate();
+function getUpcomingAge(birthday?: string | null, selectedDate?: string) {
+  if (!birthday || !selectedDate) return null;
+  const birth = new Date(birthday);
+  if (Number.isNaN(birth.getTime())) return null;
+  const selected = new Date(selectedDate);
+  return selected.getFullYear() - birth.getFullYear();
 }
 
-function getProjectedTier(attendance: number, selectedDate: string): 2 | 3 | 4 | null {
-  if (attendance <= 0) return null;
-
-  const daysElapsed = Math.max(getDayOfMonth(selectedDate), 1);
-  const daysInMonth = getDaysInMonth(selectedDate);
-  const projectedAttendance = (attendance / daysElapsed) * daysInMonth;
-
-  if (projectedAttendance >= 14) return 4;
-  if (projectedAttendance >= 10) return 3;
-  if (projectedAttendance >= 8) return 2;
-
-  return null;
-}
-
-function getKidStatus({
-  attendance,
-  behavior,
-  technique,
-  tier,
-}: {
-  attendance: number;
-  behavior: number;
-  technique: number;
-  tier: number;
-}) {
-  const { behaviorRequired, techniqueRequired } = getRequiredForTier(tier);
-
-  if (attendance < MIN_KID_ATTENDANCE) {
-    return {
-      status: "Not Enough Classes",
-      eligible: false,
-      behaviorRequired,
-      techniqueRequired,
-    };
-  }
-
-  if (behavior >= behaviorRequired && technique >= techniqueRequired) {
-    return {
-      status: "Stripe Eligible (ABT Met)",
-      eligible: true,
-      behaviorRequired,
-      techniqueRequired,
-    };
-  }
-
-  const behaviorPct = behaviorRequired > 0 ? behavior / behaviorRequired : 0;
-  const techniquePct = techniqueRequired > 0 ? technique / techniqueRequired : 0;
-  const combined = (behaviorPct + techniquePct) / 2;
-
-  if (combined >= 0.9) {
-    return {
-      status: "On Track",
-      eligible: false,
-      behaviorRequired,
-      techniqueRequired,
-    };
-  }
-
-  if (combined >= 0.75) {
-    return {
-      status: "Close",
-      eligible: false,
-      behaviorRequired,
-      techniqueRequired,
-    };
-  }
-
-  return {
-    status: "Not Eligible",
-    eligible: false,
-    behaviorRequired,
-    techniqueRequired,
-  };
+function formatBirthdayMD(birthday?: string | null) {
+  if (!birthday) return "";
+  const [, month, day] = birthday.split("-");
+  return `${month}-${day}`;
 }
 
 function getSkillAverage(ratings?: Record<string, number> | null) {
@@ -412,31 +390,35 @@ function getRequiredMonthsForAdultBelt(belt: Belt) {
   return ADULT_BELT_MONTHS[belt] ?? null;
 }
 
-function getAdultPromotionStatus(student: Student) {
-  if (student.belt === "Black") {
-    const degree = Number(student.black_belt_degree || 0);
-    const requiredYears = getBlackBeltNextDegreeYears(degree);
-    const yearsInGrade = getYearsSince(student.belt_awarded_at);
+function getPromotionStatus(student: Student) {
+  if (isAdultStudent(student)) {
+    if (student.belt === "Black") {
+      const degree = Number(student.black_belt_degree || 0);
+      const requiredYears = getBlackBeltNextDegreeYears(degree);
+      const yearsInGrade = getYearsSince(student.belt_awarded_at);
 
-    if (requiredYears === null) return "Highest black belt degree";
-    if (yearsInGrade >= requiredYears) return `Eligible for ${degree + 1} degree`;
+      if (requiredYears === null) return "Highest black belt degree";
+      if (yearsInGrade >= requiredYears) return `Eligible for ${degree + 1} degree`;
 
-    return `Needs time in grade (${yearsInGrade}/${requiredYears} yrs)`;
+      return `Needs time in grade (${yearsInGrade}/${requiredYears} yrs)`;
+    }
+
+    const max = getStripeMax(student);
+    const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+    const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
+
+    if (student.stripes >= max && requiredMonths && monthsAtBelt >= requiredMonths) {
+      return "Eligible for next belt";
+    }
+
+    if (student.stripes >= max && requiredMonths && monthsAtBelt < requiredMonths) {
+      return `Needs time at belt (${monthsAtBelt}/${requiredMonths} months)`;
+    }
+
+    return "Eligible for stripe review";
   }
 
-  const max = getStripeMax(student);
-  const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
-  const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
-
-  if (student.stripes >= max && requiredMonths && monthsAtBelt >= requiredMonths) {
-    return "Coach Review";
-  }
-
-  if (student.stripes >= max && requiredMonths && monthsAtBelt < requiredMonths) {
-    return `Needs time at belt (${monthsAtBelt}/${requiredMonths} months)`;
-  }
-
-  return "Stripe Review";
+  return student.stripes >= 12 ? "Coach Review" : "Stripe Progress";
 }
 
 function getBeltClass(belt: Belt) {
@@ -605,15 +587,9 @@ export default function CoachDashboardClient() {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [snapshots, setSnapshots] = useState<MonthlySnapshot[]>([]);
-
+  const [monthlySnapshots, setMonthlySnapshots] = useState<MonthlySnapshot[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(today());
-  const [kidsAvailableClasses, setKidsAvailableClasses] = useState<number>(16);
-  const [adultsAvailableClasses, setAdultsAvailableClasses] = useState<number>(16);
-
   const [monthLocked, setMonthLocked] = useState(false);
-  const [lockedAt, setLockedAt] = useState<string | null>(null);
-
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentBelt, setNewStudentBelt] = useState<Belt>("White");
@@ -624,6 +600,12 @@ export default function CoachDashboardClient() {
   const [message, setMessage] = useState("");
 
   const currentMonth = monthKey(selectedDate);
+  const previousMonth = getPreviousMonth(currentMonth);
+
+  const kidsAvailableClasses = countClassDaysInMonth(currentMonth, [1, 2, 3, 4]);
+  const adultsAvailableClasses = countClassDaysInMonth(currentMonth, [1, 2, 3, 4, 5]);
+  const previousMonthYouthClasses = countClassDaysInMonth(previousMonth, [1, 2, 3, 4]);
+  const previousMonthAdultClasses = countClassDaysInMonth(previousMonth, [1, 2, 3, 4, 5]);
 
   async function loadDashboardData() {
     setLoading(true);
@@ -639,15 +621,8 @@ export default function CoachDashboardClient() {
       supabase.from("students").select("*").order("created_at", { ascending: true }),
       supabase.from("sessions").select("*"),
       supabase.from("notes").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("monthly_settings")
-        .select("*")
-        .eq("month", currentMonth)
-        .maybeSingle(),
-      supabase
-        .from("monthly_snapshots")
-        .select("*")
-        .eq("month", currentMonth),
+      supabase.from("monthly_settings").select("*").eq("month", currentMonth).maybeSingle(),
+      supabase.from("monthly_snapshots").select("*").eq("month", currentMonth),
     ]);
 
     if (studentsResponse.error) {
@@ -664,12 +639,6 @@ export default function CoachDashboardClient() {
 
     if (notesResponse.error) {
       setMessage(notesResponse.error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (snapshotsResponse.error) {
-      setMessage(snapshotsResponse.error.message);
       setLoading(false);
       return;
     }
@@ -713,22 +682,8 @@ export default function CoachDashboardClient() {
     setCustomRosters(nonDefaultRosters);
     setStudents(studentList);
     setSessions(sessionsData as Session[]);
-    setSnapshots((snapshotsResponse.data || []) as MonthlySnapshot[]);
-
-    setKidsAvailableClasses(
-      monthlySettingsData?.kids_available_classes ??
-        monthlySettingsData?.available_classes ??
-        16
-    );
-
-    setAdultsAvailableClasses(
-      monthlySettingsData?.adults_available_classes ??
-        monthlySettingsData?.available_classes ??
-        16
-    );
-
+    setMonthlySnapshots((snapshotsResponse.data || []) as MonthlySnapshot[]);
     setMonthLocked(Boolean(monthlySettingsData?.locked));
-    setLockedAt(monthlySettingsData?.locked_at || null);
 
     if (studentList.length > 0 && !selectedStudentId) {
       const firstInRoster = studentList.find(
@@ -743,7 +698,21 @@ export default function CoachDashboardClient() {
   useEffect(() => {
     loadDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth]);
+  }, []);
+
+  useEffect(() => {
+    async function loadMonthData() {
+      const [{ data: settings }, { data: snapshots }] = await Promise.all([
+        supabase.from("monthly_settings").select("*").eq("month", currentMonth).maybeSingle(),
+        supabase.from("monthly_snapshots").select("*").eq("month", currentMonth),
+      ]);
+
+      setMonthLocked(Boolean(settings?.locked));
+      setMonthlySnapshots((snapshots || []) as MonthlySnapshot[]);
+    }
+
+    loadMonthData();
+  }, [currentMonth, supabase]);
 
   const dateYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -754,159 +723,19 @@ export default function CoachDashboardClient() {
     return Array.from(new Set([...DEFAULT_ROSTERS, ...customRosters]));
   }, [customRosters]);
 
-  const summaries = useMemo(() => {
-    return students.map((student) => {
-      const adult = isAdultStudent(student);
-      const availableClasses = adult ? adultsAvailableClasses : kidsAvailableClasses;
-      const blackBelt = adult && student.belt === "Black";
+  const rosterStudents = useMemo(() => {
+    if (activeRoster === "Stripe Queue") return students;
+    return students.filter((s) => (s.roster || "Wildlings") === activeRoster);
+  }, [students, activeRoster]);
 
-      const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
-
-      const monthSessions = allStudentSessions.filter(
-        (s) => monthKey(s.date) === currentMonth
-      );
-
-      const selectedSession = sessions.find(
-        (s) => s.student_id === student.id && s.date === selectedDate
-      );
-
-      const attendance = monthSessions.filter((s) => s.attendance).length;
-      const behavior = adult ? 0 : monthSessions.filter((s) => s.behavior).length;
-      const technique = adult ? 0 : monthSessions.filter((s) => s.technique).length;
-      const sitOuts = monthSessions.reduce(
-        (sum, s) => sum + Number(s.sit_out_count || 0),
-        0
-      );
-
-      const finalTier = getFinalTier(attendance);
-      const projectedTier = adult ? null : getProjectedTier(attendance, selectedDate);
-
-      const kidStatus = getKidStatus({
-        attendance,
-        behavior,
-        technique,
-        tier: finalTier,
-      });
-
-      const snapshot = snapshots.find((s) => s.student_id === student.id);
-
-      const yearsAtBelt = getYearsSince(student.belt_awarded_at);
-      const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
-      const requiredMonthsAtBelt =
-        adult && !blackBelt ? getRequiredMonthsForAdultBelt(student.belt) : null;
-
-      const trainingYears = getYearsSince(student.training_started_at);
-      const kidsTrainingYears = getYearsSince(student.kids_training_started_at);
-      const kidsMonthsSinceLastPromotion = getMonthsSince(
-        student.kids_last_belt_promotion_at
-      );
-
-      const fastTrackAverage = adult ? getFastTrackAverage(student.id) : 0;
-      const fastTrackReview = adult && fastTrackAverage >= 4;
-
-      const blackDegree = Number(student.black_belt_degree || 0);
-      const blackDegreeRequiredYears = blackBelt
-        ? getBlackBeltNextDegreeYears(blackDegree)
-        : null;
-      const blackDegreeEligible =
-        blackBelt &&
-        blackDegreeRequiredYears !== null &&
-        yearsAtBelt >= blackDegreeRequiredYears;
-
-      const adultNextBeltEligible =
-        adult &&
-        !blackBelt &&
-        student.stripes >= getStripeMax(student) &&
-        requiredMonthsAtBelt !== null &&
-        monthsAtBelt >= requiredMonthsAtBelt;
-
-      const adultEligible = adult
-        ? fastTrackReview || adultNextBeltEligible || blackDegreeEligible
-        : false;
-
-      const attendanceProgress =
-        availableClasses > 0 ? Math.min((attendance / availableClasses) * 100, 100) : 0;
-
-      const behaviorProgress =
-        kidStatus.behaviorRequired > 0
-          ? Math.min((behavior / kidStatus.behaviorRequired) * 100, 100)
-          : 0;
-
-      const techniqueProgress =
-        kidStatus.techniqueRequired > 0
-          ? Math.min((technique / kidStatus.techniqueRequired) * 100, 100)
-          : 0;
-
-      const combinedProgress =
-        !adult ? Math.round((behaviorProgress + techniqueProgress) / 2) : 0;
-
-      const skillAverage =
-        adult && !blackBelt ? getSkillAverage(student.adult_skill_ratings) : 0;
-
-      const behaviorRisk =
-        !adult && sitOuts >= 3
-          ? sitOuts >= 5
-            ? "High Behavior Risk"
-            : "Behavior Risk"
-          : "";
-
-      const promotionStatus = adult
-        ? getAdultPromotionStatus(student)
-        : snapshot?.status || kidStatus.status;
-
-      const eligible = adult ? adultEligible : snapshot?.eligible ?? kidStatus.eligible;
-
-      return {
-        ...student,
-        adult,
-        blackBelt,
-        selectedSession,
-        availableClasses,
-        attendance,
-        behavior,
-        technique,
-        sitOuts,
-        finalTier,
-        projectedTier,
-        behaviorRequired: kidStatus.behaviorRequired,
-        techniqueRequired: kidStatus.techniqueRequired,
-        status: snapshot?.status || kidStatus.status,
-        eligible,
-        snapshot,
-        fastTrackAverage,
-        fastTrackReview,
-        streak: getCurrentStreak(allStudentSessions),
-        careerStickers: getCareerStickerTotal(student.id),
-        attendanceProgress,
-        behaviorProgress,
-        techniqueProgress,
-        combinedProgress,
-        age: getAge(student.birthday),
-        promotionStatus,
-        stripeMax: getStripeMax(student),
-        yearsAtBelt,
-        monthsAtBelt,
-        requiredMonthsAtBelt,
-        trainingYears,
-        kidsTrainingYears,
-        kidsMonthsSinceLastPromotion,
-        skillAverage,
-        blackDegree,
-        blackDegreeRequiredYears,
-        blackDegreeEligible,
-        behaviorRisk,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    students,
-    sessions,
-    snapshots,
-    selectedDate,
-    currentMonth,
-    kidsAvailableClasses,
-    adultsAvailableClasses,
-  ]);
+  useEffect(() => {
+    if (rosterStudents.length > 0) {
+      const visible = rosterStudents.find((s) => s.id === selectedStudentId);
+      if (!visible) setSelectedStudentId(rosterStudents[0].id);
+    } else {
+      setSelectedStudentId(null);
+    }
+  }, [rosterStudents, selectedStudentId]);
 
   function getCareerStickerTotal(studentId: string): number {
     const studentSessions = sessions.filter((s) => s.student_id === studentId);
@@ -936,17 +765,137 @@ export default function CoachDashboardClient() {
     return count / 13;
   }
 
+  const summaries = useMemo(() => {
+    return students.map((student) => {
+      const adult = isAdultStudent(student);
+      const availableClasses = adult ? adultsAvailableClasses : kidsAvailableClasses;
+      const blackBelt = adult && student.belt === "Black";
+      const allStudentSessions = sessions.filter((s) => s.student_id === student.id);
+
+      const monthSessions = allStudentSessions.filter(
+        (s) => monthKey(s.date) === currentMonth
+      );
+
+      const attendance = monthSessions.filter((s) => s.attendance).length;
+      const behavior = adult ? 0 : monthSessions.filter((s) => s.behavior).length;
+      const technique = adult ? 0 : monthSessions.filter((s) => s.technique).length;
+      const sitOuts = monthSessions.reduce(
+        (sum, s) => sum + Number(s.sit_out_count || 0),
+        0
+      );
+
+      const projectedTier = !adult ? getProjectedTier(attendance, selectedDate) : null;
+      const kidStatus = !adult ? getKidSnapshotStatus(attendance, behavior, technique) : null;
+
+      const fastTrackAverage = adult ? getFastTrackAverage(student.id) : 0;
+      const fastTrackReview = adult && fastTrackAverage >= 4;
+
+      const yearsAtBelt = getYearsSince(student.belt_awarded_at);
+      const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+      const requiredMonthsAtBelt =
+        adult && !blackBelt ? getRequiredMonthsForAdultBelt(student.belt) : null;
+
+      const trainingYears = getYearsSince(student.training_started_at);
+      const yearsSinceLastStripe = getYearsSince(student.last_stripe_awarded_at);
+
+      const kidsTrainingYears = getYearsSince(student.kids_training_started_at);
+      const kidsMonthsSinceLastPromotion = getMonthsSince(
+        student.kids_last_belt_promotion_at
+      );
+
+      const blackDegree = Number(student.black_belt_degree || 0);
+      const blackDegreeRequiredYears = blackBelt
+        ? getBlackBeltNextDegreeYears(blackDegree)
+        : null;
+      const blackDegreeEligible =
+        blackBelt &&
+        blackDegreeRequiredYears !== null &&
+        yearsAtBelt >= blackDegreeRequiredYears;
+
+      const adultNextBeltEligible =
+        adult &&
+        !blackBelt &&
+        student.stripes >= getStripeMax(student) &&
+        requiredMonthsAtBelt !== null &&
+        monthsAtBelt >= requiredMonthsAtBelt;
+
+      const eligible = adult
+        ? fastTrackReview || adultNextBeltEligible || blackDegreeEligible
+        : Boolean(kidStatus?.eligible);
+
+      const attendanceProgress =
+        availableClasses > 0 ? Math.min((attendance / availableClasses) * 100, 100) : 0;
+
+      const behaviorProgress =
+        kidStatus && kidStatus.behaviorRequired > 0
+          ? Math.min((behavior / kidStatus.behaviorRequired) * 100, 100)
+          : 0;
+
+      const techniqueProgress =
+        kidStatus && kidStatus.techniqueRequired > 0
+          ? Math.min((technique / kidStatus.techniqueRequired) * 100, 100)
+          : 0;
+
+      const skillAverage =
+        adult && !blackBelt ? getSkillAverage(student.adult_skill_ratings) : 0;
+
+      const snapshot = monthlySnapshots.find((s) => s.student_id === student.id);
+
+      return {
+        ...student,
+        adult,
+        blackBelt,
+        availableClasses,
+        attendance,
+        behavior,
+        technique,
+        sitOuts,
+        eligible,
+        fastTrackReview,
+        fastTrackAverage,
+        streak: getCurrentStreak(allStudentSessions),
+        careerStickers: getCareerStickerTotal(student.id),
+        attendanceProgress,
+        behaviorProgress,
+        techniqueProgress,
+        age: getAge(student.birthday),
+        promotionStatus: getPromotionStatus(student),
+        stripeMax: getStripeMax(student),
+        yearsAtBelt,
+        monthsAtBelt,
+        requiredMonthsAtBelt,
+        trainingYears,
+        yearsSinceLastStripe,
+        kidsTrainingYears,
+        kidsMonthsSinceLastPromotion,
+        skillAverage,
+        blackDegree,
+        blackDegreeRequiredYears,
+        blackDegreeEligible,
+        projectedTier,
+        kidStatus,
+        behaviorRisk: sitOuts >= 3,
+        highBehaviorRisk: sitOuts >= 5,
+        snapshot,
+      };
+    });
+  }, [
+    students,
+    sessions,
+    currentMonth,
+    selectedDate,
+    kidsAvailableClasses,
+    adultsAvailableClasses,
+    monthlySnapshots,
+  ]);
+
   const visibleSummaries = summaries
-    .filter((student) => {
+    .filter((s) => {
       if (activeRoster === "Stripe Queue") {
-        return (
-          !student.adult &&
-          student.snapshot?.eligible &&
-          student.snapshot.coach_decision === "Pending"
-        );
+        return s.snapshot?.eligible && s.snapshot.coach_decision === "Pending";
       }
 
-      return (student.roster || "Wildlings") === activeRoster;
+      return (s.roster || "Wildlings") === activeRoster;
     })
     .sort((a, b) => {
       const beltList = a.adult || b.adult ? ADULT_BELTS : KIDS_BELTS;
@@ -969,22 +918,6 @@ export default function CoachDashboardClient() {
       return a.name.localeCompare(b.name);
     });
 
-  const rosterStudents = useMemo(() => {
-    if (activeRoster === "Stripe Queue") return summaries.filter((s) => s.snapshot?.eligible);
-    return summaries.filter((s) => (s.roster || "Wildlings") === activeRoster);
-  }, [summaries, activeRoster]);
-
-  useEffect(() => {
-    if (rosterStudents.length > 0) {
-      const visible = rosterStudents.find((s) => s.id === selectedStudentId);
-      if (!visible) setSelectedStudentId(rosterStudents[0].id);
-    } else {
-      setSelectedStudentId(null);
-    }
-  }, [rosterStudents, selectedStudentId]);
-
-  const selectedStudent = summaries.find((s) => s.id === selectedStudentId) || null;
-
   const birthdayStudents = summaries
     .filter((student) => getBirthdayThisMonth(student.birthday, selectedDate))
     .sort((a, b) => {
@@ -993,122 +926,100 @@ export default function CoachDashboardClient() {
       return dayA - dayB;
     });
 
-  const classSnapshot = useMemo(() => {
-    const baseStudents =
-      activeRoster === "Stripe Queue"
-        ? summaries.filter((s) => !s.adult)
-        : summaries.filter((s) => (s.roster || "Wildlings") === activeRoster);
+  const selectedStudent = summaries.find((s) => s.id === selectedStudentId) || null;
 
-    const totalRoster = baseStudents.length;
-    const present = baseStudents.filter((s) => s.selectedSession?.attendance).length;
-    const behaviorPassed = baseStudents.filter((s) => s.selectedSession?.behavior).length;
-    const techniquePassed = baseStudents.filter((s) => s.selectedSession?.technique).length;
-
-    const behaviorOfTotal =
-      totalRoster > 0 ? Math.round((behaviorPassed / totalRoster) * 100) : 0;
-
-    const behaviorOfPresent =
-      present > 0 ? Math.round((behaviorPassed / present) * 100) : 0;
-
-    const techniqueOfTotal =
-      totalRoster > 0 ? Math.round((techniquePassed / totalRoster) * 100) : 0;
-
-    return {
-      totalRoster,
-      present,
-      behaviorPassed,
-      techniquePassed,
-      behaviorOfTotal,
-      behaviorOfPresent,
-      techniqueOfTotal,
-    };
-  }, [summaries, activeRoster]);
-
-  const leaderboard = useMemo(() => {
-    const anchor = new Date(selectedDate);
-    const cutoff = new Date(anchor);
-    cutoff.setDate(anchor.getDate() - 28);
-
-    return summaries
-      .filter((s) => !s.adult)
+  const youthLeaderboard = useMemo(() => {
+    return students
+      .filter((student) => !isAdultStudent(student))
       .map((student) => {
-        const recentSessions = sessions.filter((session) => {
-          if (session.student_id !== student.id) return false;
-          const date = new Date(session.date);
-          return date >= cutoff && date <= anchor;
-        });
+        const monthSessions = sessions.filter(
+          (s) => s.student_id === student.id && monthKey(s.date) === previousMonth
+        );
 
-        const attendance = recentSessions.filter((s) => s.attendance).length;
-        const behavior = recentSessions.filter((s) => s.behavior).length;
+        const attendance = monthSessions.filter((s) => s.attendance).length;
+        const behavior = monthSessions.filter((s) => s.behavior).length;
+        const technique = monthSessions.filter((s) => s.technique).length;
 
-        const tierBase = getTierBase(student.finalTier);
-        const attendanceScore = Math.min((attendance / tierBase) * 100, 100);
-        const behaviorScore = attendance > 0 ? (behavior / attendance) * 100 : 0;
-        const score = Math.round((attendanceScore + behaviorScore) / 2);
+        const attendancePct =
+          previousMonthYouthClasses > 0
+            ? Math.min((attendance / previousMonthYouthClasses) * 100, 100)
+            : 0;
+
+        const behaviorPct = attendance > 0 ? (behavior / attendance) * 100 : 0;
+        const techniquePct = attendance > 0 ? (technique / attendance) * 100 : 0;
+
+        const score = Math.round((attendancePct + behaviorPct + techniquePct) / 3);
 
         return {
           id: student.id,
           name: student.name,
+          attendance,
+          behavior,
+          technique,
           score,
-          attendanceScore: Math.round(attendanceScore),
-          behaviorScore: Math.round(behaviorScore),
         };
       })
-      .sort((a, b) => b.score - a.score)
+      .filter((s) => s.attendance > 0)
+      .sort((a, b) => b.score - a.score || b.attendance - a.attendance)
       .slice(0, 5);
-  }, [summaries, sessions, selectedDate]);
+  }, [students, sessions, previousMonth, previousMonthYouthClasses]);
 
-  async function saveMonthlySettings(
-    month: string,
-    kidsClasses: number,
-    adultClasses: number
-  ) {
-    const { error } = await supabase
-      .from("monthly_settings")
-      .upsert(
-        {
-          month,
-          available_classes: kidsClasses,
-          kids_available_classes: kidsClasses,
-          adults_available_classes: adultClasses,
-        },
-        { onConflict: "month" }
-      );
+  const adultLeaderboard = useMemo(() => {
+    return students
+      .filter((student) => isAdultStudent(student))
+      .map((student) => {
+        const monthSessions = sessions.filter(
+          (s) => s.student_id === student.id && monthKey(s.date) === previousMonth
+        );
 
-    if (error) setMessage(error.message);
-  }
+        const attendance = monthSessions.filter((s) => s.attendance).length;
+
+        const attendancePct =
+          previousMonthAdultClasses > 0
+            ? Math.min((attendance / previousMonthAdultClasses) * 100, 100)
+            : 0;
+
+        return {
+          id: student.id,
+          name: student.name,
+          attendance,
+          attendancePct: Math.round(attendancePct),
+        };
+      })
+      .filter((s) => s.attendance > 0)
+      .sort((a, b) => b.attendance - a.attendance || b.attendancePct - a.attendancePct)
+      .slice(0, 5);
+  }, [students, sessions, previousMonth, previousMonthAdultClasses]);
 
   async function calculateMonthlySnapshots() {
-    setMessage("Calculating monthly snapshots...");
+    setMessage("Calculating month...");
 
-    const kids = summaries.filter((student) => !student.adult);
+    const rows = summaries
+      .filter((student) => !student.adult)
+      .map((student) => {
+        const status = getKidSnapshotStatus(
+          student.attendance,
+          student.behavior,
+          student.technique
+        );
 
-    const rows = kids.map((student) => {
-      const finalTier = getFinalTier(student.attendance);
-      const status = getKidStatus({
-        attendance: student.attendance,
-        behavior: student.behavior,
-        technique: student.technique,
-        tier: finalTier,
+        return {
+          student_id: student.id,
+          month: currentMonth,
+          attendance_count: student.attendance,
+          behavior_count: student.behavior,
+          technique_count: student.technique,
+          sit_out_count: student.sitOuts,
+          final_tier: status.finalTier,
+          behavior_required: status.behaviorRequired,
+          technique_required: status.techniqueRequired,
+          status: status.status,
+          eligible: status.eligible,
+          coach_decision: "Pending",
+          deny_reason: null,
+          calculated_at: new Date().toISOString(),
+        };
       });
-
-      return {
-        student_id: student.id,
-        month: currentMonth,
-        attendance_count: student.attendance,
-        behavior_count: student.behavior,
-        technique_count: student.technique,
-        sit_out_count: student.sitOuts,
-        final_tier: finalTier,
-        behavior_required: status.behaviorRequired,
-        technique_required: status.techniqueRequired,
-        status: status.status,
-        eligible: status.eligible,
-        coach_decision: "Pending",
-        deny_reason: null,
-        calculated_at: new Date().toISOString(),
-      };
-    });
 
     const { error } = await supabase
       .from("monthly_snapshots")
@@ -1132,27 +1043,24 @@ export default function CoachDashboardClient() {
         { onConflict: "month" }
       );
 
-    setMessage("Monthly snapshots calculated.");
+    setMessage("Month calculated. Stripe Queue updated.");
     await loadDashboardData();
   }
 
   async function lockMonth() {
-    if (!window.confirm("Lock this month? Sessions should not be edited after lock.")) {
-      return;
-    }
-
-    await calculateMonthlySnapshots();
+    const ok = window.confirm("Lock this month? Sessions cannot be edited after this.");
+    if (!ok) return;
 
     const { error } = await supabase
       .from("monthly_settings")
       .upsert(
         {
           month: currentMonth,
+          locked: true,
+          locked_at: new Date().toISOString(),
           available_classes: kidsAvailableClasses,
           kids_available_classes: kidsAvailableClasses,
           adults_available_classes: adultsAvailableClasses,
-          locked: true,
-          locked_at: new Date().toISOString(),
         },
         { onConflict: "month" }
       );
@@ -1163,22 +1071,14 @@ export default function CoachDashboardClient() {
     }
 
     setMonthLocked(true);
-    setLockedAt(new Date().toISOString());
     setMessage("Month locked.");
-    await loadDashboardData();
   }
 
-  async function unlockMonth() {
-    if (!window.confirm("Unlock this month? This should only be used to fix mistakes.")) {
-      return;
-    }
-
+  async function approveSnapshot(studentId: string) {
     const { error } = await supabase
-      .from("monthly_settings")
-      .update({
-        locked: false,
-        locked_at: null,
-      })
+      .from("monthly_snapshots")
+      .update({ coach_decision: "Approved", deny_reason: null })
+      .eq("student_id", studentId)
       .eq("month", currentMonth);
 
     if (error) {
@@ -1186,9 +1086,29 @@ export default function CoachDashboardClient() {
       return;
     }
 
-    setMonthLocked(false);
-    setLockedAt(null);
-    setMessage("Month unlocked.");
+    await awardStripe(studentId, true);
+    await loadDashboardData();
+  }
+
+  async function denySnapshot(studentId: string) {
+    const reason =
+      prompt(
+        "Deny reason: Needs more time, Behavior inconsistency, Technical understanding, or Other"
+      ) || "Other";
+
+    const { error } = await supabase
+      .from("monthly_snapshots")
+      .update({ coach_decision: "Denied", deny_reason: reason })
+      .eq("student_id", studentId)
+      .eq("month", currentMonth);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMessage("Stripe denied.");
+    await loadDashboardData();
   }
 
   async function addRoster() {
@@ -1284,7 +1204,6 @@ export default function CoachDashboardClient() {
 
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
     setSessions((prev) => prev.filter((s) => s.student_id !== studentId));
-    setSnapshots((prev) => prev.filter((s) => s.student_id !== studentId));
     setMessage("Student deleted.");
   }
 
@@ -1354,8 +1273,19 @@ export default function CoachDashboardClient() {
 
   async function saveSession(nextSession: Session) {
     if (monthLocked) {
-      alert("This month is locked. Sessions cannot be edited after lock.");
+      alert("This month is locked. Sessions cannot be edited.");
       return;
+    }
+
+    if (nextSession.sit_out_count && nextSession.sit_out_count >= 1) {
+      nextSession.behavior = false;
+      nextSession.technique = false;
+    }
+
+    if (nextSession.sit_out_count && nextSession.sit_out_count >= 2) {
+      nextSession.attendance = false;
+      nextSession.behavior = false;
+      nextSession.technique = false;
     }
 
     if (nextSession.technique && !nextSession.behavior) {
@@ -1457,10 +1387,10 @@ export default function CoachDashboardClient() {
     const session = getSession(studentId, selectedDate);
     const nextSession = {
       ...session,
+      sit_out_count: Number(session.sit_out_count || 0) + 1,
       attendance: true,
       behavior: false,
       technique: false,
-      sit_out_count: Number(session.sit_out_count || 0) + 1,
     };
 
     await saveSession(nextSession);
@@ -1468,10 +1398,22 @@ export default function CoachDashboardClient() {
 
   async function removeSitOut(studentId: string) {
     const session = getSession(studentId, selectedDate);
+    const nextCount = Math.max(Number(session.sit_out_count || 0) - 1, 0);
+
     const nextSession = {
       ...session,
-      sit_out_count: Math.max(Number(session.sit_out_count || 0) - 1, 0),
+      sit_out_count: nextCount,
     };
+
+    if (nextCount === 1) {
+      nextSession.attendance = true;
+      nextSession.behavior = false;
+      nextSession.technique = false;
+    }
+
+    if (nextCount === 0) {
+      nextSession.sit_out_count = 0;
+    }
 
     await saveSession(nextSession);
   }
@@ -1501,67 +1443,19 @@ export default function CoachDashboardClient() {
     setSavingNote(false);
   }
 
-  async function awardStripe(studentId: string) {
+  async function awardStripe(studentId: string, skipEligibilityCheck = false) {
     const student = summaries.find((s) => s.id === studentId);
     if (!student) return;
+
+    if (!skipEligibilityCheck && !student.eligible && !student.fastTrackReview) {
+      alert("This student is not eligible for a stripe review yet.");
+      return;
+    }
 
     await updateStudent(studentId, {
       stripes: Math.min(student.stripes + 1, getStripeMax(student)),
       last_stripe_awarded_at: today(),
     });
-  }
-
-  async function approveSnapshot(studentId: string) {
-    const snapshot = snapshots.find((s) => s.student_id === studentId);
-
-    if (!snapshot) {
-      alert("No monthly snapshot found. Calculate the month first.");
-      return;
-    }
-
-    await awardStripe(studentId);
-
-    const { error } = await supabase
-      .from("monthly_snapshots")
-      .update({
-        coach_decision: "Approved",
-        deny_reason: null,
-      })
-      .eq("student_id", studentId)
-      .eq("month", currentMonth);
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setMessage("Stripe approved and awarded.");
-    await loadDashboardData();
-  }
-
-  async function denySnapshot(studentId: string) {
-    const reason = prompt(
-      `Why are you denying this stripe?\n\n${DENY_REASONS.join("\n")}`
-    );
-
-    if (!reason) return;
-
-    const { error } = await supabase
-      .from("monthly_snapshots")
-      .update({
-        coach_decision: "Denied",
-        deny_reason: reason,
-      })
-      .eq("student_id", studentId)
-      .eq("month", currentMonth);
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setMessage("Stripe denied.");
-    await loadDashboardData();
   }
 
   async function promoteBelt(studentId: string) {
@@ -1625,7 +1519,7 @@ export default function CoachDashboardClient() {
           <p className="ghp-kicker">Coach Dashboard</p>
           <h1 className="ghp-dash-title">The Gentle Human Path Admin</h1>
           <p className="ghp-dash-lead">
-            Track ABT, calculate month-end stripe eligibility, and manage students.
+            Track ABT, calculate month-end stripes, and manage student profiles.
           </p>
         </div>
 
@@ -1635,9 +1529,7 @@ export default function CoachDashboardClient() {
             <div className="ghp-brand-chip-title">
               {monthLocked ? "Month Locked" : "Month Open"}
             </div>
-            <div className="ghp-brand-chip-sub">
-              {lockedAt ? `Locked ${lockedAt.slice(0, 10)}` : currentMonth}
-            </div>
+            <div className="ghp-brand-chip-sub">{currentMonth}</div>
           </div>
         </div>
       </section>
@@ -1683,30 +1575,22 @@ export default function CoachDashboardClient() {
         </label>
 
         <label className="ghp-field">
-          <span>Kids Classes This Month</span>
-          <input
-            type="number"
-            value={kidsAvailableClasses}
-            onChange={async (e) => {
-              const value = Number(e.target.value);
-              setKidsAvailableClasses(value);
-              await saveMonthlySettings(currentMonth, value, adultsAvailableClasses);
-            }}
-          />
+          <span>Youth Classes This Month</span>
+          <input type="number" value={kidsAvailableClasses} disabled readOnly />
         </label>
 
         <label className="ghp-field">
           <span>Adult Classes This Month</span>
-          <input
-            type="number"
-            value={adultsAvailableClasses}
-            onChange={async (e) => {
-              const value = Number(e.target.value);
-              setAdultsAvailableClasses(value);
-              await saveMonthlySettings(currentMonth, kidsAvailableClasses, value);
-            }}
-          />
+          <input type="number" value={adultsAvailableClasses} disabled readOnly />
         </label>
+
+        <button onClick={calculateMonthlySnapshots} className="ghp-btn ghp-btn-primary">
+          Calculate Month
+        </button>
+
+        <button onClick={lockMonth} className="ghp-btn ghp-btn-ghost">
+          Lock Month
+        </button>
 
         <label className="ghp-field ghp-field-wide">
           <span>Student Name</span>
@@ -1739,44 +1623,16 @@ export default function CoachDashboardClient() {
         </button>
       </section>
 
-      <section className="ghp-dash-toolbar">
-        <button onClick={calculateMonthlySnapshots} className="ghp-btn ghp-btn-ghost">
-          Calculate Month
-        </button>
-
-        {!monthLocked ? (
-          <button onClick={lockMonth} className="ghp-btn ghp-btn-primary">
-            Lock Month
-          </button>
-        ) : (
-          <button onClick={unlockMonth} className="ghp-btn ghp-btn-danger">
-            Unlock Month
-          </button>
-        )}
-
-        <div className="ghp-stat">
-          <span>Class Snapshot</span>
-          <strong>
-            {classSnapshot.present}/{classSnapshot.totalRoster}
-          </strong>
-          <div className="ghp-sheet-meta">
-            Behavior {classSnapshot.behaviorPassed}/{classSnapshot.present} • Technique{" "}
-            {classSnapshot.techniquePassed}/{classSnapshot.present} • Behavior{" "}
-            {classSnapshot.behaviorOfPresent}%
-          </div>
-        </div>
-      </section>
-
       <section className="ghp-dash-grid">
         <div className="ghp-dash-card">
           <div className="ghp-dash-card-header">
             <h2>{activeRoster} Roster</h2>
             <p>
               {activeRoster === "Stripe Queue"
-                ? "Students whose locked monthly snapshot is Stripe Eligible and still pending."
+                ? "Students who met ABT and need approval or denial."
                 : activeRoster === "Adults"
                 ? "Adults use attendance only and adult criteria."
-                : "Kids use ABT. Technique cannot be recorded unless behavior is true."}
+                : "Kids use A / B / T / S and month-end stripe calculation."}
             </p>
           </div>
 
@@ -1791,12 +1647,20 @@ export default function CoachDashboardClient() {
                   key={student.id}
                   style={
                     isQueue
-                      ? { gridTemplateColumns: "minmax(180px, 1fr) 360px" }
-                      : undefined
+                      ? { gridTemplateColumns: "minmax(180px, 1fr) 380px" }
+                      : {
+                          gridTemplateColumns:
+                            "minmax(180px, 1fr) 72px 72px 72px 72px 92px",
+                        }
                   }
                 >
                   <div className="col-name">
-                    <div className="ghp-sheet-student">{student.name}</div>
+                    <div className="ghp-sheet-student">
+                      {student.name}{" "}
+                      {student.behaviorRisk ? (
+                        <span style={{ color: "#9a3412" }}>⚠ Behavior Risk</span>
+                      ) : null}
+                    </div>
 
                     <div className="ghp-sheet-meta">
                       {student.belt}
@@ -1804,32 +1668,22 @@ export default function CoachDashboardClient() {
                         ? ` • ${student.blackDegree} degree`
                         : ` • ${student.stripes}/${student.stripeMax} stripes`}
                       {student.age !== null ? ` • ${student.age} yrs` : ""}
-                      {!student.adult
-                        ? ` • ${student.status} • Tier ${student.finalTier}x`
-                        : ""}
-                      {student.projectedTier
+                      {!student.adult && student.projectedTier
                         ? ` • Projected ${student.projectedTier}x`
                         : ""}
-                      {student.behaviorRisk ? ` • ⚠ ${student.behaviorRisk}` : ""}
+                      {!student.adult && student.kidStatus
+                        ? ` • ${student.kidStatus.status}`
+                        : ""}
+                      {isQueue && student.snapshot
+                        ? ` • ${student.snapshot.behavior_count}/${student.snapshot.behavior_required} B • ${student.snapshot.technique_count}/${student.snapshot.technique_required} T`
+                        : ""}
                     </div>
-
-                    {!student.adult ? (
-                      <div className="ghp-sheet-meta">
-                        B {student.behavior}/{student.behaviorRequired} • T{" "}
-                        {student.technique}/{student.techniqueRequired} • Sit-outs{" "}
-                        {student.sitOuts}
-                      </div>
-                    ) : null}
                   </div>
 
                   {isQueue ? (
                     <div
                       className="col-view"
-                      style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "10px",
-                      }}
+                      style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
                     >
                       <button
                         onClick={() => setSelectedStudentId(student.id)}
@@ -1886,6 +1740,26 @@ export default function CoachDashboardClient() {
                         ) : null}
                       </div>
 
+                      <div className="col-center">
+                        {!student.adult ? (
+                          <button
+                            onClick={() => addSitOut(student.id)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              removeSitOut(student.id);
+                            }}
+                            className={`ghp-bubble ${
+                              Number(session.sit_out_count || 0) > 0 ? "active-s" : ""
+                            }`}
+                            title="Click to add sit-out. Right-click to remove one."
+                          >
+                            {Number(session.sit_out_count || 0) > 0
+                              ? `S${session.sit_out_count}`
+                              : "S"}
+                          </button>
+                        ) : null}
+                      </div>
+
                       <div className="col-view">
                         <button
                           onClick={() => setSelectedStudentId(student.id)}
@@ -1909,25 +1783,46 @@ export default function CoachDashboardClient() {
         <div>
           <div className="ghp-dash-card" style={{ marginBottom: "16px" }}>
             <div className="ghp-dash-card-header">
-              <h2>Leaderboard</h2>
-              <p>Top 5 most consistent students based on rolling 4-week performance.</p>
+              <h2>
+                {activeRoster === "Adults"
+                  ? `Adult Attendance Leaders (${previousMonth})`
+                  : `Youth Leaders (${previousMonth})`}
+              </h2>
+              <p>
+                {activeRoster === "Adults"
+                  ? "Previous month adult leaderboard based on attendance."
+                  : "Previous month youth leaderboard based on attendance, behavior, and technique."}
+              </p>
             </div>
 
             <div className="ghp-birthday-list">
-              {leaderboard.map((student, index) => (
-                <div key={student.id} className="ghp-birthday-row">
-                  <div>
-                    <div className="ghp-sheet-student">
-                      {index + 1}. {student.name}
+              {activeRoster === "Adults"
+                ? adultLeaderboard.map((student, index) => (
+                    <div key={student.id} className="ghp-birthday-row">
+                      <div>
+                        <div className="ghp-sheet-student">
+                          {index + 1}. {student.name}
+                        </div>
+                        <div className="ghp-sheet-meta">
+                          Attendance {student.attendance}/{previousMonthAdultClasses}
+                        </div>
+                      </div>
+                      <div className="ghp-birthday-age">{student.attendancePct}%</div>
                     </div>
-                    <div className="ghp-sheet-meta">
-                      Attendance {student.attendanceScore}% • Behavior{" "}
-                      {student.behaviorScore}%
+                  ))
+                : youthLeaderboard.map((student, index) => (
+                    <div key={student.id} className="ghp-birthday-row">
+                      <div>
+                        <div className="ghp-sheet-student">
+                          {index + 1}. {student.name}
+                        </div>
+                        <div className="ghp-sheet-meta">
+                          A/B/T {student.attendance}/{student.behavior}/{student.technique}
+                        </div>
+                      </div>
+                      <div className="ghp-birthday-age">{student.score}%</div>
                     </div>
-                  </div>
-                  <div className="ghp-birthday-age">{student.score}%</div>
-                </div>
-              ))}
+                  ))}
             </div>
           </div>
 
@@ -1975,21 +1870,6 @@ export default function CoachDashboardClient() {
                     max={selectedStudent.stripeMax}
                     degree={selectedStudent.black_belt_degree}
                   />
-
-                  {selectedStudent.behaviorRisk ? (
-                    <div className="ghp-fast-track">
-                      {selectedStudent.behaviorRisk}: {selectedStudent.sitOuts} sit-outs
-                      this month.
-                    </div>
-                  ) : null}
-
-                  {selectedStudent.fastTrackReview ? (
-                    <div className="ghp-fast-track">
-                      Fast Track Review: averaging{" "}
-                      {selectedStudent.fastTrackAverage.toFixed(1)} classes/week over
-                      the last 90 days.
-                    </div>
-                  ) : null}
 
                   <label className="ghp-field">
                     <span>Full Name</span>
@@ -2176,10 +2056,8 @@ export default function CoachDashboardClient() {
                           roster: e.target.value,
                           belt: "White",
                           stripes: 0,
-                          belt_awarded_at:
-                            e.target.value === "Adults" ? today() : null,
-                          training_started_at:
-                            e.target.value === "Adults" ? today() : null,
+                          belt_awarded_at: e.target.value === "Adults" ? today() : null,
+                          training_started_at: e.target.value === "Adults" ? today() : null,
                           last_stripe_awarded_at: null,
                           black_belt_degree: 0,
                           kids_training_started_at:
@@ -2199,7 +2077,7 @@ export default function CoachDashboardClient() {
 
                   <div className="ghp-stat-grid">
                     <div className="ghp-stat">
-                      <span>Status</span>
+                      <span>Promotion</span>
                       <strong>{selectedStudent.promotionStatus}</strong>
                     </div>
 
@@ -2224,11 +2102,42 @@ export default function CoachDashboardClient() {
                     </div>
 
                     <div className="ghp-stat">
-                      <span>Monthly Class Count</span>
-                      <strong>{selectedStudent.availableClasses}</strong>
+                      <span>Behavior Failures</span>
+                      <strong>{selectedStudent.sitOuts}</strong>
                     </div>
 
-                    {selectedStudent.adult ? (
+                    {!selectedStudent.adult ? (
+                      <>
+                        <div className="ghp-stat">
+                          <span>Projected Tier</span>
+                          <strong>
+                            {selectedStudent.projectedTier
+                              ? `${selectedStudent.projectedTier}x`
+                              : "—"}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Month Status</span>
+                          <strong>{selectedStudent.kidStatus?.status || "—"}</strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>A / B / T</span>
+                          <strong>
+                            {selectedStudent.attendance} / {selectedStudent.behavior} /{" "}
+                            {selectedStudent.technique}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Since Last Belt Promotion</span>
+                          <strong>
+                            {selectedStudent.kidsMonthsSinceLastPromotion} / 12 months
+                          </strong>
+                        </div>
+                      </>
+                    ) : (
                       <>
                         <div className="ghp-stat">
                           <span>Training Time</span>
@@ -2264,58 +2173,7 @@ export default function CoachDashboardClient() {
                           </strong>
                         </div>
                       </>
-                    ) : (
-                      <>
-                        <div className="ghp-stat">
-                          <span>Final Tier</span>
-                          <strong>{selectedStudent.finalTier}x</strong>
-                        </div>
-
-                        <div className="ghp-stat">
-                          <span>Projected Tier</span>
-                          <strong>
-                            {selectedStudent.projectedTier
-                              ? `${selectedStudent.projectedTier}x`
-                              : "—"}
-                          </strong>
-                        </div>
-
-                        <div className="ghp-stat">
-                          <span>A / B / T</span>
-                          <strong>
-                            {selectedStudent.attendance} / {selectedStudent.behavior} /{" "}
-                            {selectedStudent.technique}
-                          </strong>
-                        </div>
-
-                        <div className="ghp-stat">
-                          <span>B / T Required</span>
-                          <strong>
-                            {selectedStudent.behaviorRequired} /{" "}
-                            {selectedStudent.techniqueRequired}
-                          </strong>
-                        </div>
-
-                        <div className="ghp-stat">
-                          <span>Sit-Outs</span>
-                          <strong>{selectedStudent.sitOuts}</strong>
-                        </div>
-
-                        <div className="ghp-stat">
-                          <span>Since Last Belt Promotion</span>
-                          <strong>
-                            {selectedStudent.kidsMonthsSinceLastPromotion} / 12 months
-                          </strong>
-                        </div>
-                      </>
                     )}
-
-                    <div className="ghp-stat">
-                      <span>Eligibility</span>
-                      <strong className={selectedStudent.eligible ? "ghp-green" : "ghp-gold"}>
-                        {selectedStudent.eligible ? "Eligible" : "Not Yet"}
-                      </strong>
-                    </div>
                   </div>
 
                   <div className="ghp-parent-progress-block">
