@@ -179,7 +179,7 @@ function countClassDaysInMonth(month: string, allowedDays: number[]) {
     const date = new Date(year, monthNumber - 1, day);
     const weekday = date.getDay();
 
-    if (allowedDays.includes(weekday)) count++;
+    if (allowedDays.includes(weekday)) count += 1;
   }
 
   return count;
@@ -216,7 +216,7 @@ function getYearsSince(date?: string | null) {
   let years = now.getFullYear() - start.getFullYear();
   const m = now.getMonth() - start.getMonth();
 
-  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--;
+  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years -= 1;
   return Math.max(years, 0);
 }
 
@@ -336,7 +336,7 @@ function getAge(birthday?: string | null) {
   let age = now.getFullYear() - birth.getFullYear();
   const m = now.getMonth() - birth.getMonth();
 
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
   return age;
 }
 
@@ -947,7 +947,6 @@ export default function CoachDashboardClient() {
 
         const behaviorPct = attendance > 0 ? (behavior / attendance) * 100 : 0;
         const techniquePct = attendance > 0 ? (technique / attendance) * 100 : 0;
-
         const score = Math.round((attendancePct + behaviorPct + techniquePct) / 3);
 
         return {
@@ -1383,27 +1382,22 @@ export default function CoachDashboardClient() {
     await saveSession(nextSession);
   }
 
-  async function addSitOut(studentId: string) {
+  async function cycleSitOut(studentId: string) {
     const session = getSession(studentId, selectedDate);
-    const nextSession = {
-      ...session,
-      sit_out_count: Number(session.sit_out_count || 0) + 1,
-      attendance: true,
-      behavior: false,
-      technique: false,
-    };
+    const current = Number(session.sit_out_count || 0);
+    const nextCount = current >= 2 ? 0 : current + 1;
 
-    await saveSession(nextSession);
-  }
-
-  async function removeSitOut(studentId: string) {
-    const session = getSession(studentId, selectedDate);
-    const nextCount = Math.max(Number(session.sit_out_count || 0) - 1, 0);
-
-    const nextSession = {
+    const nextSession: Session = {
       ...session,
       sit_out_count: nextCount,
     };
+
+    if (nextCount === 0) {
+      nextSession.attendance = session.attendance;
+      nextSession.behavior = false;
+      nextSession.technique = false;
+      nextSession.sit_out_count = 0;
+    }
 
     if (nextCount === 1) {
       nextSession.attendance = true;
@@ -1411,8 +1405,10 @@ export default function CoachDashboardClient() {
       nextSession.technique = false;
     }
 
-    if (nextCount === 0) {
-      nextSession.sit_out_count = 0;
+    if (nextCount >= 2) {
+      nextSession.attendance = false;
+      nextSession.behavior = false;
+      nextSession.technique = false;
     }
 
     await saveSession(nextSession);
@@ -1743,15 +1739,11 @@ export default function CoachDashboardClient() {
                       <div className="col-center">
                         {!student.adult ? (
                           <button
-                            onClick={() => addSitOut(student.id)}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              removeSitOut(student.id);
-                            }}
+                            onClick={() => cycleSitOut(student.id)}
                             className={`ghp-bubble ${
                               Number(session.sit_out_count || 0) > 0 ? "active-s" : ""
                             }`}
-                            title="Click to add sit-out. Right-click to remove one."
+                            title="Tap to cycle sit-outs: S → S1 → S2 → S"
                           >
                             {Number(session.sit_out_count || 0) > 0
                               ? `S${session.sit_out_count}`
