@@ -403,6 +403,50 @@ function getRequiredMonthsForAdultBelt(belt: Belt) {
   return ADULT_BELT_MONTHS[belt] ?? null;
 }
 
+function getYouthTimelineEstimate(startedAt?: string | null) {
+  const monthsTrained = getMonthsSince(startedAt);
+  const expectedBeltIndex = Math.min(
+    Math.floor(monthsTrained / 12),
+    KIDS_BELTS.length - 1
+  );
+  const expectedBelt = KIDS_BELTS[expectedBeltIndex];
+  const expectedStripes = monthsTrained % 12;
+  const expectedTotalStripeUnits = expectedBeltIndex * 12 + expectedStripes;
+
+  return {
+    monthsTrained,
+    expectedBelt,
+    expectedStripes,
+    expectedTotalStripeUnits,
+  };
+}
+
+function getYouthActualStripeUnits(student: Student) {
+  const beltIndex = Math.max(KIDS_BELTS.indexOf(student.belt), 0);
+  return beltIndex * 12 + Number(student.stripes || 0);
+}
+
+function getYouthPaceStatus(student: Student) {
+  const estimate = getYouthTimelineEstimate(student.kids_training_started_at);
+  const actualUnits = getYouthActualStripeUnits(student);
+  const difference = actualUnits - estimate.expectedTotalStripeUnits;
+
+  if (!student.kids_training_started_at) return "Missing Start Date";
+  if (difference >= 3) return "Ahead";
+  if (difference <= -3) return "Behind";
+  return "On Pace";
+}
+
+function formatMonthsAsYearsMonths(months: number) {
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+
+  if (years <= 0) return `${remainingMonths} mo`;
+  if (remainingMonths === 0) return `${years} yr${years === 1 ? "" : "s"}`;
+
+  return `${years} yr${years === 1 ? "" : "s"} ${remainingMonths} mo`;
+}
+
 function getPromotionStatus(student: Student) {
   if (isAdultStudent(student)) {
     if (student.belt === "Black") {
@@ -829,9 +873,17 @@ export default function CoachDashboardClient() {
       const yearsSinceLastStripe = getYearsSince(student.last_stripe_awarded_at);
 
       const kidsTrainingYears = getYearsSince(student.kids_training_started_at);
+      const kidsTrainingMonths = getMonthsSince(student.kids_training_started_at);
       const kidsMonthsSinceLastPromotion = getMonthsSince(
         student.kids_last_belt_promotion_at
       );
+      const youthTimelineEstimate = !adult
+        ? getYouthTimelineEstimate(student.kids_training_started_at)
+        : null;
+      const youthPaceStatus = !adult ? getYouthPaceStatus(student) : null;
+      const youthActualStripeUnits = !adult ? getYouthActualStripeUnits(student) : 0;
+      const youthExpectedStripeUnits = youthTimelineEstimate?.expectedTotalStripeUnits || 0;
+      const youthTimelineDifference = youthActualStripeUnits - youthExpectedStripeUnits;
 
       const blackDegree = Number(student.black_belt_degree || 0);
       const blackDegreeRequiredYears = blackBelt
@@ -897,7 +949,13 @@ export default function CoachDashboardClient() {
         trainingYears,
         yearsSinceLastStripe,
         kidsTrainingYears,
+        kidsTrainingMonths,
         kidsMonthsSinceLastPromotion,
+        youthTimelineEstimate,
+        youthPaceStatus,
+        youthActualStripeUnits,
+        youthExpectedStripeUnits,
+        youthTimelineDifference,
         skillAverage,
         blackDegree,
         blackDegreeRequiredYears,
@@ -2361,6 +2419,45 @@ export default function CoachDashboardClient() {
                           <span>Since Last Belt Promotion</span>
                           <strong>
                             {selectedStudent.kidsMonthsSinceLastPromotion} / 12 months
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Training Time</span>
+                          <strong>
+                            {formatMonthsAsYearsMonths(selectedStudent.kidsTrainingMonths || 0)}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Expected Progress</span>
+                          <strong>
+                            {selectedStudent.youthTimelineEstimate
+                              ? `${selectedStudent.youthTimelineEstimate.expectedBelt} • ${selectedStudent.youthTimelineEstimate.expectedStripes}/12`
+                              : "—"}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Timeline Status</span>
+                          <strong
+                            className={
+                              selectedStudent.youthPaceStatus === "Behind"
+                                ? "ghp-gold"
+                                : selectedStudent.youthPaceStatus === "Ahead"
+                                ? "ghp-green"
+                                : ""
+                            }
+                          >
+                            {selectedStudent.youthPaceStatus || "—"}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Actual vs Expected</span>
+                          <strong>
+                            {selectedStudent.youthTimelineDifference > 0 ? "+" : ""}
+                            {selectedStudent.youthTimelineDifference || 0} stripes
                           </strong>
                         </div>
                       </>
