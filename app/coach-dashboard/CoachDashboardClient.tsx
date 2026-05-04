@@ -394,6 +394,14 @@ function getSkillAverage(ratings?: Record<string, number> | null) {
   return total / ADULT_SKILL_CATEGORIES.length;
 }
 
+function getSkillRatingCount(ratings?: Record<string, number> | null) {
+  if (!ratings) return 0;
+
+  return ADULT_SKILL_CATEGORIES.filter((category) => {
+    return Number(ratings[category] || 0) > 0;
+  }).length;
+}
+
 function getBlackBeltNextDegreeYears(degree?: number | null) {
   const current = Number(degree || 0);
   return BLACK_BELT_DEGREE_YEARS[current] ?? null;
@@ -533,7 +541,18 @@ function getAdultPaceStatus(student: Student) {
   }
 
   const estimate = getAdultTimelineEstimate(student);
-  if (!estimate) return "Missing Dates";
+  const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
+  const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+
+  if (!estimate || !requiredMonths) return "Missing Dates";
+
+  if (monthsAtBelt >= requiredMonths && Number(student.stripes || 0) >= 4) {
+    return "Review Due";
+  }
+
+  if (monthsAtBelt >= requiredMonths && Number(student.stripes || 0) < 4) {
+    return "Overdue Review";
+  }
 
   const actualUnits = getAdultActualStripeUnits(student);
   const difference = actualUnits - estimate.expectedTotalStripeUnits;
@@ -561,7 +580,7 @@ function getPromotionStatus(student: Student) {
     const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
 
     if (student.stripes >= max && requiredMonths && monthsAtBelt >= requiredMonths) {
-      return "Eligible for next belt";
+      return "Belt Review";
     }
 
     if (student.stripes >= max && requiredMonths && monthsAtBelt < requiredMonths) {
@@ -1023,6 +1042,8 @@ export default function CoachDashboardClient() {
 
       const skillAverage =
         adult && !blackBelt ? getSkillAverage(student.adult_skill_ratings) : 0;
+      const skillRatingCount =
+        adult && !blackBelt ? getSkillRatingCount(student.adult_skill_ratings) : 0;
 
       const snapshot = monthlySnapshots.find((s) => s.student_id === student.id);
 
@@ -1066,6 +1087,7 @@ export default function CoachDashboardClient() {
         youthExpectedStripeUnits,
         youthTimelineDifference,
         skillAverage,
+        skillRatingCount,
         blackDegree,
         blackDegreeRequiredYears,
         blackDegreeEligible,
@@ -2491,15 +2513,15 @@ export default function CoachDashboardClient() {
                     </div>
 
                     <div className="ghp-stat">
-                      <span>Attendance Count</span>
+                      <span>This Month Attendance</span>
                       <strong>{selectedStudent.attendance}</strong>
                     </div>
 
                     {!selectedStudent.adult ? (
                       <div className="ghp-stat">
-                      <span>Behavior Failures</span>
-                      <strong>{selectedStudent.sitOuts}</strong>
-                    </div>
+                        <span>Behavior Failures</span>
+                        <strong>{selectedStudent.sitOuts}</strong>
+                      </div>
                     ) : null}
 
                     {!selectedStudent.adult ? (
@@ -2575,11 +2597,6 @@ export default function CoachDashboardClient() {
                     ) : (
                       <>
                         <div className="ghp-stat">
-                          <span>Training Time</span>
-                          <strong>{selectedStudent.trainingYears} yrs</strong>
-                        </div>
-
-                        <div className="ghp-stat">
                           <span>Time at Grade</span>
                           <strong>
                             {selectedStudent.blackBelt
@@ -2620,10 +2637,12 @@ export default function CoachDashboardClient() {
                           <span>Timeline Status</span>
                           <strong
                             className={
-                              selectedStudent.adultPaceStatus === "Behind"
+                              selectedStudent.adultPaceStatus === "Behind" ||
+                                selectedStudent.adultPaceStatus === "Overdue Review"
                                 ? "ghp-gold"
                                 : selectedStudent.adultPaceStatus === "Ahead" ||
-                                  selectedStudent.adultPaceStatus === "Degree Review"
+                                  selectedStudent.adultPaceStatus === "Degree Review" ||
+                                  selectedStudent.adultPaceStatus === "Review Due"
                                 ? "ghp-green"
                                 : ""
                             }
@@ -2636,8 +2655,11 @@ export default function CoachDashboardClient() {
                           <div className="ghp-stat">
                             <span>Actual vs Expected</span>
                             <strong>
-                              {selectedStudent.adultTimelineDifference > 0 ? "+" : ""}
-                              {selectedStudent.adultTimelineDifference || 0} stripes
+                              {selectedStudent.adultTimelineDifference === 0
+                                ? "At expected marker"
+                                : `${selectedStudent.adultTimelineDifference > 0 ? "+" : ""}${
+                                    selectedStudent.adultTimelineDifference
+                                  } stripes`}
                             </strong>
                           </div>
                         ) : null}
@@ -2645,12 +2667,16 @@ export default function CoachDashboardClient() {
                         {!selectedStudent.blackBelt ? (
                           <div className="ghp-stat">
                             <span>Total Skill Level</span>
-                            <strong>{selectedStudent.skillAverage.toFixed(1)}/10</strong>
+                            <strong>
+                              {selectedStudent.skillRatingCount > 0
+                                ? `${selectedStudent.skillAverage.toFixed(1)}/10`
+                                : "Not Evaluated"}
+                            </strong>
                           </div>
                         ) : null}
 
                         <div className="ghp-stat">
-                          <span>90 Day Avg</span>
+                          <span>90-Day Attendance Avg</span>
                           <strong>
                             {selectedStudent.fastTrackAverage.toFixed(1)} / wk
                           </strong>
