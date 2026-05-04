@@ -2495,10 +2495,12 @@ export default function CoachDashboardClient() {
                       <strong>{selectedStudent.attendance}</strong>
                     </div>
 
-                    <div className="ghp-stat">
+                    {!selectedStudent.adult ? (
+                      <div className="ghp-stat">
                       <span>Behavior Failures</span>
                       <strong>{selectedStudent.sitOuts}</strong>
                     </div>
+                    ) : null}
 
                     {!selectedStudent.adult ? (
                       <>
