@@ -86,7 +86,7 @@ const KIDS_BELTS: Belt[] = [
 
 const ADULT_BELTS: Belt[] = ["White", "Blue", "Purple", "Brown", "Black"];
 
-const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults", "Stripe Queue", "Needs Attention", "Birthdays"];
+const DEFAULT_ROSTERS = ["Wildlings", "Hunters", "Adults", "Stripe Queue", "Needs Attention", "Ketchup", "Birthdays"];
 const REAL_ROSTERS = ["Wildlings", "Hunters", "Adults"];
 
 const MIN_ATTENDANCE = 8;
@@ -900,6 +900,7 @@ export default function CoachDashboardClient() {
     if (
       activeRoster === "Stripe Queue" ||
       activeRoster === "Needs Attention" ||
+      activeRoster === "Ketchup" ||
       activeRoster === "Birthdays"
     ) {
       return students;
@@ -912,6 +913,7 @@ export default function CoachDashboardClient() {
     if (
       activeRoster === "Stripe Queue" ||
       activeRoster === "Needs Attention" ||
+      activeRoster === "Ketchup" ||
       activeRoster === "Birthdays"
     ) {
       setSelectedStudentId(null);
@@ -1118,6 +1120,10 @@ export default function CoachDashboardClient() {
         return !s.adult && Boolean(s.snapshot) && !s.snapshot?.eligible;
       }
 
+      if (activeRoster === "Ketchup") {
+        return !s.adult && Number(s.youthTimelineDifference || 0) < 0;
+      }
+
       if (activeRoster === "Birthdays") {
         return false;
       }
@@ -1125,6 +1131,10 @@ export default function CoachDashboardClient() {
       return (s.roster || "Wildlings") === activeRoster;
     })
     .sort((a, b) => {
+      if (activeRoster === "Ketchup") {
+        return Number(a.youthTimelineDifference || 0) - Number(b.youthTimelineDifference || 0);
+      }
+
       const beltList = a.adult || b.adult ? ADULT_BELTS : KIDS_BELTS;
       const beltA = beltList.indexOf(a.belt);
       const beltB = beltList.indexOf(b.belt);
@@ -1168,6 +1178,7 @@ export default function CoachDashboardClient() {
   const selectedStudent =
     activeRoster === "Stripe Queue" ||
     activeRoster === "Needs Attention" ||
+    activeRoster === "Ketchup" ||
     activeRoster === "Birthdays"
       ? null
       : summaries.find((s) => s.id === selectedStudentId) || null;
@@ -1254,6 +1265,19 @@ export default function CoachDashboardClient() {
     }
 
     return reasons.length > 0 ? reasons.join(" + ") : "Needs Coach Review";
+  }
+
+  function getKetchupReason(student: any) {
+    const difference = Number(student.youthTimelineDifference || 0);
+
+    if (difference <= -12) return "Needs Belt Review";
+    if (difference <= -3) return "Needs Stripe Catch-Up";
+    return "Slightly Behind";
+  }
+
+  function openStudentProfile(student: any) {
+    setActiveRoster(student.roster || "Wildlings");
+    setSelectedStudentId(student.id);
   }
 
   async function calculateMonthlySnapshots() {
@@ -1856,7 +1880,9 @@ export default function CoachDashboardClient() {
               Lock Month
             </button>
           </>
-        ) : activeRoster === "Needs Attention" || activeRoster === "Birthdays" ? null : (
+        ) : activeRoster === "Needs Attention" ||
+          activeRoster === "Ketchup" ||
+          activeRoster === "Birthdays" ? null : (
           <button
             type="button"
             className="ghp-btn ghp-btn-ghost"
@@ -1871,6 +1897,7 @@ export default function CoachDashboardClient() {
 
         {activeRoster !== "Stripe Queue" &&
         activeRoster !== "Needs Attention" &&
+        activeRoster !== "Ketchup" &&
         activeRoster !== "Birthdays" ? (
           <div id="ghp-add-student-form" className="ghp-add-student-panel ghp-hidden">
             <label className="ghp-field ghp-field-wide">
@@ -1913,6 +1940,8 @@ export default function CoachDashboardClient() {
                 ? "Students who met ABT and need approval or denial."
                 : activeRoster === "Needs Attention"
                 ? "Students who did not meet the monthly ABT requirements."
+                : activeRoster === "Ketchup"
+                ? "Temporary catch-up list for youth students who are behind their expected belt or stripe timeline."
                 : activeRoster === "Birthdays"
                 ? "Birthday list for the selected month, next month, and missing birthdays."
                 : activeRoster === "Adults"
@@ -2008,7 +2037,8 @@ export default function CoachDashboardClient() {
               const session = getSession(student.id, selectedDate);
               const isQueue = activeRoster === "Stripe Queue";
               const isNeedsAttention = activeRoster === "Needs Attention";
-              const isReview = isQueue || isNeedsAttention;
+              const isKetchup = activeRoster === "Ketchup";
+              const isReview = isQueue || isNeedsAttention || isKetchup;
 
               return (
                 <div
@@ -2049,6 +2079,9 @@ export default function CoachDashboardClient() {
                       {isNeedsAttention && student.snapshot
                         ? ` • ${getNeedsAttentionReason(student.snapshot)} • A ${student.snapshot.attendance_count}/8 • B ${student.snapshot.behavior_count}/${student.snapshot.behavior_required} • T ${student.snapshot.technique_count}/${student.snapshot.technique_required}`
                         : ""}
+                      {isKetchup && student.youthTimelineEstimate
+                        ? ` • ${getKetchupReason(student)} • Actual: ${student.belt} ${student.stripes}/${student.stripeMax} • Expected: ${student.youthTimelineEstimate.expectedBelt} ${student.youthTimelineEstimate.expectedStripes}/12 • Behind by ${Math.abs(Number(student.youthTimelineDifference || 0))} stripe${Math.abs(Number(student.youthTimelineDifference || 0)) === 1 ? "" : "s"}`
+                        : ""}
                     </div>
                   </div>
 
@@ -2071,6 +2104,16 @@ export default function CoachDashboardClient() {
                             className="ghp-btn ghp-btn-danger"
                           >
                             Deny
+                          </button>
+                        </>
+                      ) : isKetchup ? (
+                        <>
+                          <strong className="ghp-gold">{getKetchupReason(student)}</strong>
+                          <button
+                            onClick={() => openStudentProfile(student)}
+                            className="ghp-btn ghp-btn-ghost ghp-btn-small"
+                          >
+                            Open Profile
                           </button>
                         </>
                       ) : (
@@ -2149,6 +2192,8 @@ export default function CoachDashboardClient() {
               <div className="ghp-sheet-empty">
                 {activeRoster === "Needs Attention"
                   ? "No students need attention for this month."
+                  : activeRoster === "Ketchup"
+                  ? "No youth students need ketchup right now."
                   : "No students here yet."}
               </div>
             ) : null}
@@ -2211,12 +2256,17 @@ export default function CoachDashboardClient() {
             </div>
           ) : null}
 
-          {activeRoster === "Stripe Queue" || activeRoster === "Needs Attention" || activeRoster === "Birthdays" ? (
+          {activeRoster === "Stripe Queue" ||
+          activeRoster === "Needs Attention" ||
+          activeRoster === "Ketchup" ||
+          activeRoster === "Birthdays" ? (
             <div className="ghp-dash-card">
               <div className="ghp-dash-card-header">
                 <h2>
                   {activeRoster === "Birthdays"
                     ? "Birthday Center"
+                    : activeRoster === "Ketchup"
+                    ? "Ketchup"
                     : activeRoster === "Needs Attention"
                     ? "Needs Attention"
                     : "Month-End Review"}
@@ -2224,6 +2274,8 @@ export default function CoachDashboardClient() {
                 <p>
                   {activeRoster === "Birthdays"
                     ? "Birthday tracking is separated from daily class tracking."
+                    : activeRoster === "Ketchup"
+                    ? "Temporary catch-up screen for youth students who are behind their expected timeline."
                     : activeRoster === "Needs Attention"
                     ? "This screen shows kids who did not meet monthly ABT requirements."
                     : "This screen is only for kid stripe decisions. Adult profiles and daily tracking are hidden here so the queue stays clean."}
@@ -2240,6 +2292,8 @@ export default function CoachDashboardClient() {
                   <span>
                     {activeRoster === "Needs Attention"
                       ? "Needs Attention"
+                      : activeRoster === "Ketchup"
+                      ? "Catch-Up Students"
                       : activeRoster === "Birthdays"
                       ? "This Month"
                       : "Pending Stripes"}
