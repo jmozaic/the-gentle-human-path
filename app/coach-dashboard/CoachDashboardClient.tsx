@@ -447,6 +447,102 @@ function formatMonthsAsYearsMonths(months: number) {
   return `${years} yr${years === 1 ? "" : "s"} ${remainingMonths} mo`;
 }
 
+function getAdultStripeIntervalMonths(belt: Belt) {
+  const requiredMonths = getRequiredMonthsForAdultBelt(belt);
+  if (!requiredMonths) return null;
+
+  return requiredMonths / 4;
+}
+
+function getAdultTimelineEstimate(student: Student) {
+  if (!isAdultStudent(student)) return null;
+
+  if (student.belt === "Black") {
+    const degree = Number(student.black_belt_degree || 0);
+    const requiredYears = getBlackBeltNextDegreeYears(degree);
+    const yearsInGrade = getYearsSince(student.belt_awarded_at);
+
+    return {
+      type: "black-belt" as const,
+      expectedBelt: "Black" as Belt,
+      expectedStripes: 0,
+      expectedDegree: degree,
+      requiredYears,
+      yearsInGrade,
+      monthsAtBelt: getMonthsSince(student.belt_awarded_at),
+      stripeIntervalMonths: null as number | null,
+      expectedTotalStripeUnits: ADULT_BELTS.indexOf("Black") * 4,
+    };
+  }
+
+  const monthsAtBelt = getMonthsSince(student.belt_awarded_at);
+  const requiredMonths = getRequiredMonthsForAdultBelt(student.belt);
+  const stripeIntervalMonths = getAdultStripeIntervalMonths(student.belt);
+
+  if (!requiredMonths || !stripeIntervalMonths) {
+    return {
+      type: "adult-belt" as const,
+      expectedBelt: student.belt,
+      expectedStripes: Number(student.stripes || 0),
+      expectedDegree: null,
+      requiredYears: null,
+      yearsInGrade: getYearsSince(student.belt_awarded_at),
+      monthsAtBelt,
+      stripeIntervalMonths: null as number | null,
+      expectedTotalStripeUnits:
+        Math.max(ADULT_BELTS.indexOf(student.belt), 0) * 4 +
+        Number(student.stripes || 0),
+    };
+  }
+
+  const beltIndex = Math.max(ADULT_BELTS.indexOf(student.belt), 0);
+  const expectedStripes = Math.min(Math.floor(monthsAtBelt / stripeIntervalMonths), 4);
+  const expectedTotalStripeUnits = beltIndex * 4 + expectedStripes;
+
+  return {
+    type: "adult-belt" as const,
+    expectedBelt: student.belt,
+    expectedStripes,
+    expectedDegree: null,
+    requiredYears: null,
+    yearsInGrade: getYearsSince(student.belt_awarded_at),
+    monthsAtBelt,
+    stripeIntervalMonths,
+    expectedTotalStripeUnits,
+  };
+}
+
+function getAdultActualStripeUnits(student: Student) {
+  const beltIndex = Math.max(ADULT_BELTS.indexOf(student.belt), 0);
+  return beltIndex * 4 + Number(student.stripes || 0);
+}
+
+function getAdultPaceStatus(student: Student) {
+  if (!student.training_started_at || !student.belt_awarded_at) {
+    return "Missing Dates";
+  }
+
+  if (student.belt === "Black") {
+    const degree = Number(student.black_belt_degree || 0);
+    const requiredYears = getBlackBeltNextDegreeYears(degree);
+    const yearsInGrade = getYearsSince(student.belt_awarded_at);
+
+    if (requiredYears === null) return "Highest Degree";
+    if (yearsInGrade >= requiredYears) return "Degree Review";
+    return "On Pace";
+  }
+
+  const estimate = getAdultTimelineEstimate(student);
+  if (!estimate) return "Missing Dates";
+
+  const actualUnits = getAdultActualStripeUnits(student);
+  const difference = actualUnits - estimate.expectedTotalStripeUnits;
+
+  if (difference >= 1) return "Ahead";
+  if (difference <= -1) return "Behind";
+  return "On Pace";
+}
+
 function getPromotionStatus(student: Student) {
   if (isAdultStudent(student)) {
     if (student.belt === "Black") {
@@ -869,6 +965,13 @@ export default function CoachDashboardClient() {
       const requiredMonthsAtBelt =
         adult && !blackBelt ? getRequiredMonthsForAdultBelt(student.belt) : null;
 
+      const adultTrainingMonths = getMonthsSince(student.training_started_at);
+      const adultTimelineEstimate = adult ? getAdultTimelineEstimate(student) : null;
+      const adultPaceStatus = adult ? getAdultPaceStatus(student) : null;
+      const adultActualStripeUnits = adult ? getAdultActualStripeUnits(student) : 0;
+      const adultExpectedStripeUnits = adultTimelineEstimate?.expectedTotalStripeUnits || 0;
+      const adultTimelineDifference = adultActualStripeUnits - adultExpectedStripeUnits;
+
       const trainingYears = getYearsSince(student.training_started_at);
       const yearsSinceLastStripe = getYearsSince(student.last_stripe_awarded_at);
 
@@ -946,6 +1049,12 @@ export default function CoachDashboardClient() {
         yearsAtBelt,
         monthsAtBelt,
         requiredMonthsAtBelt,
+        adultTrainingMonths,
+        adultTimelineEstimate,
+        adultPaceStatus,
+        adultActualStripeUnits,
+        adultExpectedStripeUnits,
+        adultTimelineDifference,
         trainingYears,
         yearsSinceLastStripe,
         kidsTrainingYears,
@@ -2482,6 +2591,54 @@ export default function CoachDashboardClient() {
                                 } months`}
                           </strong>
                         </div>
+
+                        <div className="ghp-stat">
+                          <span>Training Time</span>
+                          <strong>
+                            {formatMonthsAsYearsMonths(selectedStudent.adultTrainingMonths || 0)}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Expected Progress</span>
+                          <strong>
+                            {selectedStudent.blackBelt
+                              ? selectedStudent.adultTimelineEstimate?.requiredYears !== null
+                                ? `${selectedStudent.blackDegree} → ${
+                                    Number(selectedStudent.blackDegree || 0) + 1
+                                  } degree`
+                                : "Highest Degree"
+                              : selectedStudent.adultTimelineEstimate
+                              ? `${selectedStudent.adultTimelineEstimate.expectedBelt} • ${selectedStudent.adultTimelineEstimate.expectedStripes}/4`
+                              : "—"}
+                          </strong>
+                        </div>
+
+                        <div className="ghp-stat">
+                          <span>Timeline Status</span>
+                          <strong
+                            className={
+                              selectedStudent.adultPaceStatus === "Behind"
+                                ? "ghp-gold"
+                                : selectedStudent.adultPaceStatus === "Ahead" ||
+                                  selectedStudent.adultPaceStatus === "Degree Review"
+                                ? "ghp-green"
+                                : ""
+                            }
+                          >
+                            {selectedStudent.adultPaceStatus || "—"}
+                          </strong>
+                        </div>
+
+                        {!selectedStudent.blackBelt ? (
+                          <div className="ghp-stat">
+                            <span>Actual vs Expected</span>
+                            <strong>
+                              {selectedStudent.adultTimelineDifference > 0 ? "+" : ""}
+                              {selectedStudent.adultTimelineDifference || 0} stripes
+                            </strong>
+                          </div>
+                        ) : null}
 
                         {!selectedStudent.blackBelt ? (
                           <div className="ghp-stat">
